@@ -36,7 +36,10 @@ import { tenantPortalRouter } from "./routes/tenant-portal.js";
 import { remindersRouter } from "./routes/reminders.js";
 
 const app = express();
-const PORT = Number(process.env.PORT) || 3000;
+// Bolt environments can reserve ports for internal tooling, so only accept a
+// PORT override inside the allowed range; otherwise fall back to the default.
+const requestedPort = Number(process.env.PORT);
+const PORT = requestedPort >= 3000 && requestedPort <= 8999 ? requestedPort : 5100;
 
 // ── Global Middleware ──
 
