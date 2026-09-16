@@ -1,0 +1,11 @@
+schema_version: 1
+module_path: server/maintenance_and_lease
+title: Maintenance, Lease & Financial Reports API
+scope:
+    - server/src/routes/maintenance.ts
+    - server/src/routes/leases.ts
+    - server/src/routes/reports.ts
+source_files: []
+depends_on: []
+related_to:
+    - path: client

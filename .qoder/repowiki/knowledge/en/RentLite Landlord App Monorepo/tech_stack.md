@@ -1,0 +1,1 @@
+pnpm workspaces + Node ≥20; TypeScript across all three packages; Docker Compose for local dev (PostgreSQL 16, Express server, Vite client); Prisma for database migrations seeded via the server package.

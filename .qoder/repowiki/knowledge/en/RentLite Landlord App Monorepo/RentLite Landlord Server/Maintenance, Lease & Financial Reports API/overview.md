@@ -1,0 +1,1 @@
+Express route handlers for maintenance requests, lease lifecycle management, and financial reporting (cashflow, Schedule E, P&L) scoped to the authenticated user's properties.

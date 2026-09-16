@@ -1,0 +1,6 @@
+- Feature pages are colocated one-per-file under `src/pages/` and imported directly by `App.tsx` route declarations.
+- Protected routes are wrapped in a `ProtectedRoute` component that reads `useAuth()` and redirects unauthenticated users to `/login` while showing a spinner during auth load.
+- API calls go through the singleton `ApiClient` instance exported from `src/lib/api.ts`, using typed generic methods (`get<T>`, `post<T>`, `put<T>`, `delete<T>`) rather than raw `fetch`.
+- Authentication state is exposed exclusively through the `useAuth` context hook, which normalizes better-auth's session into `{ user, isLoading, isAuthenticated }`.
+- Reusable presentational components live under `src/components/ui/` and are composed into page-level views instead of inline JSX fragments.
+- Environment configuration is read via `import.meta.env.VITE_*` variables (e.g. `VITE_API_URL`) with empty-string fallbacks for local development.

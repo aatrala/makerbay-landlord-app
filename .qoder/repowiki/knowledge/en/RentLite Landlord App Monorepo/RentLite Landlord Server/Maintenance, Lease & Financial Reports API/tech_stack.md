@@ -1,0 +1,1 @@
+Express `Router` + `zod` for request validation + Drizzle ORM query builder against a PostgreSQL-backed database; authentication enforced via a shared `authMiddleware`.

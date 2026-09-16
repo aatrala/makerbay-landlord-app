@@ -1,0 +1,1 @@
+TypeScript 5.7 compiled with `tsc`; published as an ESM-only package with dual `import`/`types` exports.

@@ -1,0 +1,1 @@
+Express route handlers that expose CRUD endpoints for properties, units, and tenants, enforcing ownership-based authorization and Zod input validation against a Drizzle ORM-backed database.

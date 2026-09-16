@@ -1,0 +1,102 @@
+# 知识卡导出索引文件
+schema_version: 1
+locale: en-US
+branch: Q0DeR-MaG1C-BrAnCh-Fo2-NoN-GiT-Or-No-C0MmIt
+nodes_managed: true
+exported_at: "2026-09-12T07:44:41Z"
+modules:
+    "":
+        dir_name: RentLite Landlord App Monorepo
+        title: RentLite Landlord App Monorepo
+        scope:
+            - package.json
+            - pnpm-workspace.yaml
+            - tsconfig.json
+            - .gitignore
+            - RentLite-Product-Spec-Sheet.md
+            - Reusable AI-App Technology and Design Stack Playbook.md
+            - docker-compose.yml
+            - .env.example
+            - pnpm-lock.yaml
+        source_files: []
+        children:
+            - client
+            - server
+            - shared
+        depends_on: []
+        related_to: []
+    client:
+        dir_name: Landlord Dashboard React Client
+        title: Landlord Dashboard React Client
+        scope:
+            - client/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: server/financial_operations
+            - path: server/maintenance_and_lease
+            - path: server/property_management
+            - path: shared
+    server:
+        dir_name: RentLite Landlord Server
+        title: RentLite Landlord Server
+        scope:
+            - server/
+        source_files: []
+        children:
+            - server/financial_operations
+            - server/maintenance_and_lease
+            - server/property_management
+        depends_on: []
+        related_to:
+            - path: shared
+    server/financial_operations:
+        dir_name: Financial Operations REST API (Payments, Expenses, Vendors)
+        title: Financial Operations REST API (Payments, Expenses, Vendors)
+        scope:
+            - server/src/routes/payments.ts
+            - server/src/routes/expenses.ts
+            - server/src/routes/vendors.ts
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: client
+            - path: server/property_management
+    server/maintenance_and_lease:
+        dir_name: Maintenance, Lease & Financial Reports API
+        title: Maintenance, Lease & Financial Reports API
+        scope:
+            - server/src/routes/maintenance.ts
+            - server/src/routes/leases.ts
+            - server/src/routes/reports.ts
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: client
+    server/property_management:
+        dir_name: Property, Unit & Tenant Resource Routes
+        title: Property, Unit & Tenant Resource Routes
+        scope:
+            - server/src/routes/properties.ts
+            - server/src/routes/tenants.ts
+            - server/src/routes/units.ts
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: client
+            - path: server/financial_operations
+    shared:
+        dir_name: Shared Domain Types (Landlord App)
+        title: Shared Domain Types (Landlord App)
+        scope:
+            - shared/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: client
+            - path: server

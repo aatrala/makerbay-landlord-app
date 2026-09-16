@@ -1,0 +1,1 @@
+Vite + React SPA for the landlord dashboard, providing authentication, routing, and UI pages for properties, tenants, payments, maintenance, expenses, and reports.

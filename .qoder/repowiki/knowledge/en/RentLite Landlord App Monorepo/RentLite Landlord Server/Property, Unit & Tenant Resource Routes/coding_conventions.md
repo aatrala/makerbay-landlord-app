@@ -1,0 +1,5 @@
+- Every route handler extracts `userId` from `req.userId` (cast via `(req as any).userId`) and scopes all DB queries with `eq(column, userId)` or `and(eq(id), eq(userId))` to enforce ownership.
+- Request bodies are validated with Zod schemas defined at the top of each file; POST uses the full schema while PUT uses its `.partial()` variant, and failures return `{ message: 'Validation error', code: 'VALIDATION', details: parsed.error.flatten() }`.
+- Non-existent resources are rejected with a uniform `{ message: 'Not found', code: 'NOT_FOUND' }` 404 response before any mutation.
+- Mutations use `.returning()` on insert/update to return the persisted entity wrapped in `{ data: ... }`, keeping a consistent JSON envelope across all endpoints.
+- Update handlers explicitly set `updatedAt: new Date()` alongside spread-incoming fields when persisting changes.

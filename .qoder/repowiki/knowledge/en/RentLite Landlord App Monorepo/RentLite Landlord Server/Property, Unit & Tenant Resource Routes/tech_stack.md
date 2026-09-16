@@ -1,0 +1,1 @@
+Express Router + TypeScript, Zod for request validation, Drizzle ORM for typed SQL queries against a PostgreSQL-backed schema.

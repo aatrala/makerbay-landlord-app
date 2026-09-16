@@ -1,0 +1,1 @@
+Express + TypeScript (ESM) as the runtime; Drizzle ORM with PostgreSQL for persistence; Better-Auth for authentication; Zod for request validation; Resend for email; Multer for file uploads.

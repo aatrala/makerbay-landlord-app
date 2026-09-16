@@ -1,0 +1,1 @@
+`pnpm dev` starts the full stack via `docker compose up`; `pnpm build` builds shared → server → client in order; `pnpm db:push|studio|seed` delegate to the server package's Prisma tooling.

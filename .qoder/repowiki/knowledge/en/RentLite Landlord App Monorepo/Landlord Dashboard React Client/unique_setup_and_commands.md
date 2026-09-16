@@ -1,0 +1,1 @@
+Run development with `pnpm dev` (exposed on 0.0.0.0:5173); build with `pnpm build`; type-check with `pnpm check`. The Dockerfile uses pnpm workspaces — it installs dependencies, builds `@rentlite/shared` first, then builds the client, and defaults to running the dev server.

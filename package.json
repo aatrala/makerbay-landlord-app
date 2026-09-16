@@ -1,0 +1,20 @@
+{
+  "name": "rentlite",
+  "private": true,
+  "version": "0.1.0",
+  "description": "RentLite – Simple property management for small landlords",
+  "scripts": {
+    "dev": "docker compose up",
+    "dev:server": "pnpm --filter server dev",
+    "dev:client": "pnpm --filter client dev",
+    "build": "pnpm --filter shared build && pnpm --filter server build && pnpm --filter client build",
+    "check": "pnpm --filter shared check && pnpm --filter server check && pnpm --filter client check",
+    "db:push": "pnpm --filter server db:push",
+    "db:studio": "pnpm --filter server db:studio",
+    "db:seed": "pnpm --filter server db:seed"
+  },
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  }
+}

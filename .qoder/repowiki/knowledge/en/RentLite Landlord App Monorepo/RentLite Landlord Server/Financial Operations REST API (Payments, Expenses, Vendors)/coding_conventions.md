@@ -1,0 +1,5 @@
+- Each route file creates an Express `Router`, applies `authMiddleware` globally via `router.use`, and exports the router as a named export (`paymentsRouter`, `expensesRouter`, `vendorsRouter`).
+- Request bodies are validated with a Zod schema before any DB mutation; POST routes use the full schema, PUT routes use `.partial()` of the same schema, and validation failures return a uniform `{ message, code: 'VALIDATION', details }` response.
+- Resource mutations check existence first via `db.query.<table>.findFirst` and return a `{ message, code: 'NOT_FOUND' }` response when not found before performing updates or deletes.
+- User-scoped access is enforced by fetching the authenticated `userId` from `(req as any).userId` and filtering results to rows owned by that user (e.g., matching `property.userId`, `vendor.userId`, or derived unit ownership).
+- All successful responses wrap payloads in a `{ data: ... }` envelope, and created resources are returned with HTTP 201 status codes.

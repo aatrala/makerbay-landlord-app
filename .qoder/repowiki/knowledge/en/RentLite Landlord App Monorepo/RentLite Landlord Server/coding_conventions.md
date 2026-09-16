@@ -1,0 +1,4 @@
+- Each resource lives in its own `routes/<resource>.ts` file exporting a named router mounted at `/api/<resource>` from the app entrypoint.
+- Route handlers validate incoming requests with Zod schemas before performing any business logic.
+- Database access goes through the shared Drizzle client exported from `src/db/index.ts`, using the centralized schema and relations.
+- Ownership-scoped queries are enforced via the `authHandler` middleware so routes only operate on resources belonging to the authenticated user.

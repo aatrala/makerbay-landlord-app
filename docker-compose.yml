@@ -1,0 +1,63 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: rentlite-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: rentlite
+      POSTGRES_PASSWORD: rentlite_dev
+      POSTGRES_DB: rentlite
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rentlite"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    container_name: rentlite-server
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://rentlite:rentlite_dev@postgres:5432/rentlite
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-dev-secret-change-in-production}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
+      CLIENT_URL: ${CLIENT_URL:-http://localhost:5173}
+      RESEND_API_KEY: ${RESEND_API_KEY:-re_test_placeholder}
+      TWILIO_SID: ${TWILIO_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_PHONE: ${TWILIO_PHONE:-}
+      PLAID_CLIENT_ID: ${PLAID_CLIENT_ID:-}
+      PLAID_SECRET: ${PLAID_SECRET:-}
+      PLAID_ENV: ${PLAID_ENV:-sandbox}
+      UPLOAD_DIR: /app/uploads
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    volumes:
+      - uploads:/app/uploads
+
+  client:
+    build:
+      context: .
+      dockerfile: client/Dockerfile
+    container_name: rentlite-client
+    restart: unless-stopped
+    depends_on:
+      - server
+    environment:
+      VITE_API_URL: http://localhost:3000
+    ports:
+      - "5173:5173"
+
+volumes:
+  pgdata:
+  uploads:

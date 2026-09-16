@@ -1,0 +1,1 @@
+Express route handlers exposing CRUD and summary endpoints for payments, expenses, and vendors with ownership-scoped access to landlord property data.

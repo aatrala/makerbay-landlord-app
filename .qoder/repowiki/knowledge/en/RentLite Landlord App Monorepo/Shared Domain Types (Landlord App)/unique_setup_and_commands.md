@@ -1,0 +1,1 @@
+`npm run build` runs `tsc` to emit `.js` + `.d.ts` into `dist/`; `npm run check` performs type checking without emitting files.

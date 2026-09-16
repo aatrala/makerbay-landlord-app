@@ -1,0 +1,12 @@
+schema_version: 1
+module_path: client
+title: Landlord Dashboard React Client
+scope:
+    - client/
+source_files: []
+depends_on: []
+related_to:
+    - path: server/financial_operations
+    - path: server/maintenance_and_lease
+    - path: server/property_management
+    - path: shared

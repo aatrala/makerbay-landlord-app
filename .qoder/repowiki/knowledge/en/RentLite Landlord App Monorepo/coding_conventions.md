@@ -1,0 +1,3 @@
+- Cross-cutting domain types live exclusively in the `shared` package and are imported by both `server` and `client` rather than redefined per service.
+- Each package exposes its own lifecycle scripts (`dev`, `build`, `check`) and is invoked through the root `pnpm --filter <pkg>` commands instead of being run directly.
+- Runtime configuration is externalized via environment variables defined in `.env.example` and injected through `docker-compose.yml` rather than hard-coded.

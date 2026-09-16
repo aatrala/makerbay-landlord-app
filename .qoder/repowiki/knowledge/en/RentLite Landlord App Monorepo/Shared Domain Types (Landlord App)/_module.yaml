@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: shared
+title: Shared Domain Types (Landlord App)
+scope:
+    - shared/
+source_files: []
+depends_on: []
+related_to:
+    - path: client
+    - path: server

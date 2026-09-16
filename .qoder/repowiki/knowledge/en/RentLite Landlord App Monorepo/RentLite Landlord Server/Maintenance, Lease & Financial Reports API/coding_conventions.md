@@ -1,0 +1,6 @@
+- Each route module creates an Express `Router`, applies `authMiddleware` globally on the router, and exports the router as a named export (`maintenanceRouter`, `leasesRouter`, `reportsRouter`).
+- Request bodies are validated with a Zod schema via `safeParse`, returning a uniform `{ message: 'Validation error', code: 'VALIDATION', details }` 400 response on failure.
+- Multi-tenant data access is enforced by first loading the authenticated user's property IDs into a `Set` and then filtering results in memory before responding.
+- Missing resources return a consistent `{ message: 'Not found', code: 'NOT_FOUND' }` 404 JSON payload rather than generic Express errors.
+- Write operations that change entity state also update related entities (e.g., lease creation sets unit status to `occupied`; completion of a maintenance request sets `completedAt`).
+- Report endpoints accept optional `year` and `quarter` query parameters with sensible defaults and compute aggregates by mapping over loaded rows in JavaScript.

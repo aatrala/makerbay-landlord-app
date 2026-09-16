@@ -1,0 +1,4 @@
+- Domain entities are modeled as TypeScript `interface`s with immutable `id`, `userId`/`propertyId`/`unitId` foreign-key fields plus `createdAt`/`updatedAt` timestamp strings.
+- Enumerated values are expressed as string literal union `type`s (e.g. `PropertyType`, `PaymentMethod`, `MaintenancePriority`) rather than `enum`s.
+- Optional or nullable fields use explicit `| null` unions instead of optional properties, keeping database schema semantics visible in the type layer.
+- Cross-cutting API contracts like `ApiError` and `PaginatedResponse<T>` are defined once and reused across endpoints for consistent error and pagination shape.

@@ -1,0 +1,1 @@
+pnpm workspace monorepo that composes a shared TypeScript domain package, an Express REST API server, and a Vite+React landlord dashboard into a single Dockerized development environment.

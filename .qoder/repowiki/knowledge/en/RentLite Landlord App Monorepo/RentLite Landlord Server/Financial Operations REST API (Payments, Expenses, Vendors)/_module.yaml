@@ -1,0 +1,12 @@
+schema_version: 1
+module_path: server/financial_operations
+title: Financial Operations REST API (Payments, Expenses, Vendors)
+scope:
+    - server/src/routes/payments.ts
+    - server/src/routes/expenses.ts
+    - server/src/routes/vendors.ts
+source_files: []
+depends_on: []
+related_to:
+    - path: client
+    - path: server/property_management

@@ -1,0 +1,12 @@
+schema_version: 1
+module_path: server/property_management
+title: Property, Unit & Tenant Resource Routes
+scope:
+    - server/src/routes/properties.ts
+    - server/src/routes/tenants.ts
+    - server/src/routes/units.ts
+source_files: []
+depends_on: []
+related_to:
+    - path: client
+    - path: server/financial_operations

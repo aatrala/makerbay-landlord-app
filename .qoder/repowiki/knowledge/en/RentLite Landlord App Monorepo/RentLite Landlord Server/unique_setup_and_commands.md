@@ -1,0 +1,1 @@
+`npm run dev` starts the server with `tsx watch`; `npm run build` compiles to `dist/` via `tsc`; `npm run db:push` / `db:studio` / `db:seed` manage the Drizzle database schema and seed data.

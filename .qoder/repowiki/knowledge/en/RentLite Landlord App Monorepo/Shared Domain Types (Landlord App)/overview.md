@@ -1,0 +1,1 @@
+TypeScript-only shared package that defines the landlord application's domain models, enums, and API response shapes consumed by both frontend and backend services.

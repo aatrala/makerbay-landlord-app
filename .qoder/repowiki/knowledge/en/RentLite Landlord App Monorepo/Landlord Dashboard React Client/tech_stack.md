@@ -1,0 +1,1 @@
+React 19 + Vite 6 + TypeScript, styled with Tailwind CSS v4, routed with wouter, data fetching via @tanstack/react-query (staleTime 30s, single retry), authentication via better-auth, charts via recharts, toast notifications via sonner, and Radix UI primitives for dialogs, tabs, tooltips, etc.

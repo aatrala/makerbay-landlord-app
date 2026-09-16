@@ -1,0 +1,1 @@
+Express-based REST API server that wires together property, financial, maintenance, lease, and reporting route modules behind a shared auth, DB, and email infrastructure.

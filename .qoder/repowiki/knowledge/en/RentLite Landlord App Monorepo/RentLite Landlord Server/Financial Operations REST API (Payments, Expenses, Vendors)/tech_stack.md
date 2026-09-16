@@ -1,0 +1,1 @@
+Express Router + TypeScript; Drizzle ORM for database queries; Zod for runtime request-body validation; UUID-based tenant/resource identifiers.

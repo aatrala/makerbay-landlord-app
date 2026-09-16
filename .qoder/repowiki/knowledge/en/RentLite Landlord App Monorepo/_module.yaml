@@ -1,0 +1,16 @@
+schema_version: 1
+module_path: ""
+title: RentLite Landlord App Monorepo
+scope:
+    - package.json
+    - pnpm-workspace.yaml
+    - tsconfig.json
+    - .gitignore
+    - RentLite-Product-Spec-Sheet.md
+    - Reusable AI-App Technology and Design Stack Playbook.md
+    - docker-compose.yml
+    - .env.example
+    - pnpm-lock.yaml
+source_files: []
+depends_on: []
+related_to: []
