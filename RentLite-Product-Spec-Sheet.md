@@ -1,4 +1,4 @@
-﻿---
+---
 document_type: Product Specification Sheet
 version: 1.0
 date: September 11, 2026
