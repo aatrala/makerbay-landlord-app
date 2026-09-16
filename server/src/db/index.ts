@@ -41,10 +41,16 @@ let db!: AppDatabase;
 if (isPglite) {
   const { PGlite } = await import("@electric-sql/pglite");
   const { drizzle: drizzlePglite } = await import("drizzle-orm/pglite");
-  const dataDir = connectionString.slice("pglite:".length) || "./pgdata";
+  const dataDir = connectionString.slice("pglite:".length) || "pgdata";
+  // Anchor relative paths to the server package. Compiled output lives at
+  // server/dist/db while source lives at server/src/db, so resolve against
+  // whichever marker exists to keep one shared database per install.
+  const packageRoot = fs.existsSync(path.resolve(__dirname, "../../package.json"))
+    ? path.resolve(__dirname, "../..") // compiled: server/dist/db -> server
+    : path.resolve(__dirname, "../../.."); // source: server/src/db -> server
   const resolvedDir = path.isAbsolute(dataDir)
     ? dataDir
-    : path.resolve(process.cwd(), dataDir);
+    : path.resolve(packageRoot, dataDir);
   const client = new PGlite(resolvedDir);
   db = drizzlePglite(client, {
     schema: { ...schema, ...relations },

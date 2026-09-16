@@ -2,19 +2,25 @@
   "name": "rentlite",
   "private": true,
   "version": "0.1.0",
+  "workspaces": [
+    "shared",
+    "server",
+    "client"
+  ],
   "description": "RentLite – Simple property management for small landlords",
   "scripts": {
-    "dev": "docker compose up",
-    "dev:server": "pnpm --filter server dev",
-    "dev:client": "pnpm --filter client dev",
-    "build": "pnpm --filter shared build && pnpm --filter server build && pnpm --filter client build",
-    "check": "pnpm --filter shared check && pnpm --filter server check && pnpm --filter client check",
-    "db:push": "pnpm --filter server db:push",
-    "db:studio": "pnpm --filter server db:studio",
-    "db:seed": "pnpm --filter server db:seed"
+    "dev": "concurrently -k -n server,client -c blue,green \"npm run dev -w server\" \"npm run dev -w client\"",
+    "dev:server": "npm run dev -w server",
+    "dev:client": "npm run dev -w client",
+    "build": "npm run build -w shared && npm run build -w server && npm run build -w client",
+    "check": "npm run check -w shared && npm run check -w server && npm run check -w client",
+    "db:seed": "npm run db:seed -w server",
+    "db:studio": "npm run db:studio -w server"
   },
   "engines": {
-    "node": ">=20",
-    "pnpm": ">=9"
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5"
   }
 }
