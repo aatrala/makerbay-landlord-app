@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link, useLocation } from "wouter";
-import { signUp } from "../lib/auth-client";
+import { getSession, signUp } from "../lib/auth-client";
+import { completeAuthRedirect } from "../lib/post-auth";
 import { Button } from "../components/ui/Button";
 import { Input, Label } from "../components/ui/Input";
 import { Building2, Eye, EyeOff, ArrowRight } from "lucide-react";
@@ -42,7 +43,8 @@ export function Signup() {
       }
 
       toast.success("Account created successfully!");
-      setLocation("/");
+      const ok = await completeAuthRedirect({ getSession: () => getSession(), navigate: (to) => window.location.assign(to) });
+      if (!ok) setLocation("/");
     } catch {
       toast.error("Something went wrong. Please try again.");
     } finally {
