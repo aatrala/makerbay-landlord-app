@@ -40,7 +40,7 @@
   "vars": {
     "APP_URL": "https://managehomestay.aatrala.workers.dev",
     "BETTER_AUTH_URL": "https://managehomestay.aatrala.workers.dev",
-    "EMAIL_FROM": "Manage Homestay <noreply@managehomestay.com>",
+    "EMAIL_FROM": "Manage Homestay <noreply@send.managehomestay.com>",
     "TURNSTILE_SITE_KEY": "0x4AAAAAAFxAC9O0LvhR23pN"
   }
 
