@@ -5,3 +5,8 @@ dist/
 uploads/
 pgdata/
 .DS_Store
+.wrangler/
+.dev.vars*
+!.dev.vars.example
+dist-worker/
+*.tsbuildinfo

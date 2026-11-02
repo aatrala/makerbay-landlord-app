@@ -1,24 +1,23 @@
 {
-  "name": "rentlite",
+  "name": "managehomestay",
   "private": true,
   "version": "0.1.0",
-  "workspaces": [
-    "shared",
-    "server",
-    "client"
-  ],
-  "description": "RentLite – Simple property management for small landlords",
+  "description": "Manage Homestay \u2013 short-stay and long-term rental management (Cloudflare Workers)",
   "scripts": {
-    "dev": "concurrently -k -n server,client -c blue,green \"npm run dev -w server\" \"npm run dev -w client\"",
-    "dev:server": "npm run dev -w server",
-    "dev:client": "npm run dev -w client",
-    "build": "npm run build -w shared && npm run build -w server && npm run build -w client",
-    "check": "npm run check -w shared && npm run check -w server && npm run check -w client",
-    "db:seed": "npm run db:seed -w server",
-    "db:studio": "npm run db:studio -w server"
+    "dev": "concurrently -k -n server,client -c blue,green \"pnpm -F server dev\" \"pnpm -F client dev\"",
+    "dev:server": "pnpm -F server dev",
+    "dev:client": "pnpm -F client dev",
+    "build": "pnpm -F @rentlite/shared build && pnpm -F client build && pnpm -F server build",
+    "check": "pnpm -F @rentlite/shared check && pnpm -F server check && pnpm -F client check",
+    "test": "pnpm -F server test",
+    "db:migrate": "pnpm -F server db:migrate",
+    "db:seed": "pnpm -F server db:seed",
+    "db:studio": "pnpm -F server db:studio",
+    "deploy:preview": "pnpm build && pnpm -F server deploy:preview",
+    "deploy": "pnpm build && pnpm -F server deploy"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "devDependencies": {
     "concurrently": "^10.0.5"

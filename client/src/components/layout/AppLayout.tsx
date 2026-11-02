@@ -16,10 +16,26 @@ import {
   X,
   Home,
   ChevronRight,
+  BedDouble,
+  CalendarDays,
+  Contact,
+  SprayCan,
+  LineChart,
+  Mail,
+  FileText,
 } from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { section: "Short stays" },
+  { href: "/str/bookings", label: "Calendar", icon: CalendarDays },
+  { href: "/str/listings", label: "Listings", icon: BedDouble },
+  { href: "/str/guests", label: "Guests", icon: Contact },
+  { href: "/str/turnovers", label: "Turnovers", icon: SprayCan },
+  { href: "/str/messages", label: "Guest messages", icon: Mail },
+  { href: "/str/reports", label: "STR reports", icon: LineChart },
+  { href: "/str/owners", label: "Owner statements", icon: FileText },
+  { section: "Long-term rentals" },
   { href: "/properties", label: "Properties", icon: Building2 },
   { href: "/tenants", label: "Tenants", icon: Users },
   { href: "/payments", label: "Payments", icon: CreditCard },
@@ -53,7 +69,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             <Home className="h-5 w-5 text-white" />
           </div>
           <span className="text-lg font-extrabold tracking-tight text-ink">
-            RentLite
+            Manage Homestay
           </span>
         </div>
 
@@ -61,6 +77,13 @@ export function AppLayout({ children }: { children: ReactNode }) {
         <nav className="flex-1 overflow-y-auto px-3 py-4">
           <ul className="space-y-1">
             {NAV_ITEMS.map((item) => {
+              if (!("href" in item) || !item.href) {
+                return (
+                  <li key={item.section} className="px-3 pb-1 pt-4 text-[11px] font-bold uppercase tracking-wider text-muted/70">
+                    {item.section}
+                  </li>
+                );
+              }
               const isActive =
                 item.href === "/"
                   ? location === "/"

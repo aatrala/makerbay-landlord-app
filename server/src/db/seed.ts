@@ -1,4 +1,6 @@
-import { db } from "./index.js";
+import "dotenv/config";
+import { db, createPostgresDb, setDefaultDb } from "./index.js";
+import { createPgliteDb } from "./local.js";
 import { hashPassword } from "better-auth/crypto";
 import {
   user,
@@ -13,7 +15,7 @@ import {
   vendor,
 } from "./schema.js";
 
-// Demo credentials: landlord@rentlite.dev / demo1234, tenant@rentlite.dev / demo1234
+// Demo credentials: landlord@managehomestay.test / demo1234, tenant@managehomestay.test / demo1234
 
 function dateOffset(days: number): string {
   const d = new Date();
@@ -21,12 +23,21 @@ function dateOffset(days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+async function connect() {
+  const url = process.env.DATABASE_URL || "pglite:./pgdata";
+  const { db: d } = url.startsWith("pglite:")
+    ? await createPgliteDb(url.slice("pglite:".length) || "./pgdata")
+    : await createPostgresDb(url);
+  setDefaultDb(d);
+}
+
 async function seed() {
-  console.log("[RentLite] Seeding demo data...");
+  await connect();
+  console.log("[Manage Homestay] Seeding demo data...");
 
   const existing = await db.select().from(user);
   if (existing.length > 0) {
-    console.log("[RentLite] Database already has users, skipping seed.");
+    console.log("[Manage Homestay] Database already has users, skipping seed.");
     return;
   }
 
@@ -45,7 +56,7 @@ async function seed() {
     .values({
       id: "demo-landlord-001",
       name: "Sarah Mitchell",
-      email: "landlord@rentlite.dev",
+      email: "landlord@managehomestay.test",
       emailVerified: true,
     })
     .returning();
@@ -55,7 +66,7 @@ async function seed() {
     .values({
       id: "demo-tenant-001",
       name: "Marcus Chen",
-      email: "tenant@rentlite.dev",
+      email: "tenant@managehomestay.test",
       emailVerified: true,
     })
     .returning();
@@ -147,7 +158,7 @@ async function seed() {
         tenantUserId: tenantUser.id,
         firstName: "Marcus",
         lastName: "Chen",
-        email: "tenant@rentlite.dev",
+        email: "tenant@managehomestay.test",
         phone: "512-555-0142",
         employer: "Dell Technologies",
       },
@@ -326,14 +337,14 @@ async function seed() {
     { propertyId: oakwood.id, category: "utilities", description: "Water for common areas", amount: 78, date: dateOffset(-15), isRecurring: true, recurringFrequency: "monthly" },
   ]);
 
-  console.log("[RentLite] Seed complete.");
-  console.log("  Landlord login: landlord@rentlite.dev / demo1234");
-  console.log("  Tenant portal:  tenant@rentlite.dev / demo1234");
+  console.log("[Manage Homestay] Seed complete.");
+  console.log("  Landlord login: landlord@managehomestay.test / demo1234");
+  console.log("  Tenant portal:  tenant@managehomestay.test / demo1234");
 }
 
 seed()
   .then(() => process.exit(0))
   .catch((err) => {
-    console.error("[RentLite] Seed failed:", err);
+    console.error("[Manage Homestay] Seed failed:", err);
     process.exit(1);
   });

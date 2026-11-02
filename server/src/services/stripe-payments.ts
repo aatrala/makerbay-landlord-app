@@ -6,7 +6,7 @@ function getStripeClient(): Stripe | null {
   if (stripeClient) return stripeClient;
   const secretKey = process.env.STRIPE_SECRET_KEY;
   if (!secretKey) return null;
-  stripeClient = new Stripe(secretKey);
+  stripeClient = new Stripe(secretKey, { httpClient: Stripe.createFetchHttpClient() });
   return stripeClient;
 }
 
@@ -32,7 +32,7 @@ export async function createPaymentIntent(params: {
 
   const paymentIntent = await stripe.paymentIntents.create({
     amount: amountInCents,
-    currency: params.currency || "usd",
+    currency: params.currency || process.env.STRIPE_CURRENCY || "usd",
     automatic_payment_methods: { enabled: true },
     metadata: {
       rentlite_payment_id: params.paymentId,
@@ -70,17 +70,28 @@ export async function confirmPaymentStatus(
 /**
  * Construct a Stripe webhook event for signature verification.
  */
-export function constructWebhookEvent(
+export async function constructWebhookEvent(
   payload: string | Buffer,
   signature: string,
-): Stripe.Event | null {
+): Promise<Stripe.Event | null> {
   const stripe = getStripeClient();
   if (!stripe) return null;
 
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
   if (!webhookSecret) return null;
 
-  return stripe.webhooks.constructEvent(payload, signature, webhookSecret);
+  // Async + SubtleCrypto works on Workers (no Node crypto needed).
+  try {
+    return await stripe.webhooks.constructEventAsync(
+      payload,
+      signature,
+      webhookSecret,
+      undefined,
+      Stripe.createSubtleCryptoProvider(),
+    );
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -88,4 +99,45 @@ export function constructWebhookEvent(
  */
 export function getPublishableKey(): string | null {
   return process.env.STRIPE_PUBLISHABLE_KEY || null;
+}
+
+/** Map a Stripe payment method type to our payment_method enum. */
+export function mapStripeMethodType(type: string | null | undefined):
+  "card" | "ach" | "bank_transfer" | "other" {
+  switch (type) {
+    case "card":
+    case "link":
+    case "apple_pay":
+    case "google_pay":
+      return "card";
+    case "us_bank_account":
+      return "ach";
+    case "au_becs_debit":
+    case "sepa_debit":
+    case "bacs_debit":
+    case "acss_debit":
+    case "customer_balance":
+      return "bank_transfer";
+    default:
+      return "other";
+  }
+}
+
+/**
+ * Resolve the payment method type ("card", "us_bank_account", ...) for a PaymentIntent.
+ * Uses the expanded object if present, otherwise retrieves it from Stripe.
+ */
+export async function getPaymentMethodType(
+  pm: string | { type?: string } | null | undefined,
+): Promise<string | null> {
+  if (!pm) return null;
+  if (typeof pm !== "string") return pm.type ?? null;
+  const stripe = getStripeClient();
+  if (!stripe) return null;
+  try {
+    const obj = await stripe.paymentMethods.retrieve(pm);
+    return obj.type;
+  } catch {
+    return null;
+  }
 }

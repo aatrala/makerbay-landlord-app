@@ -1,12 +1,15 @@
 import { useState, type FormEvent } from "react";
 import { Link, useLocation } from "wouter";
-import { signIn } from "../lib/auth-client";
+import { getSession, signIn } from "../lib/auth-client";
+import { completeAuthRedirect } from "../lib/post-auth";
 import { Button } from "../components/ui/Button";
 import { Input, Label } from "../components/ui/Input";
 import { Building2, Eye, EyeOff, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
+import { useTurnstile } from "../components/auth/Turnstile";
 
 export function Login() {
+  const captcha = useTurnstile();
   const [, setLocation] = useLocation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -18,15 +21,17 @@ export function Login() {
     setLoading(true);
 
     try {
-      const result = await signIn.email({ email, password });
+      const result = await signIn.email({ email, password }, { headers: captcha.headers() });
 
       if (result.error) {
+        captcha.reset();
         toast.error(result.error.message || "Invalid email or password");
         return;
       }
 
       toast.success("Welcome back!");
-      setLocation("/");
+      const ok = await completeAuthRedirect({ getSession: () => getSession(), navigate: (to) => window.location.assign(to) });
+      if (!ok) setLocation("/");
     } catch {
       toast.error("Something went wrong. Please try again.");
     } finally {
@@ -42,22 +47,22 @@ export function Login() {
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-signal">
             <Building2 className="h-5 w-5 text-white" />
           </div>
-          <span className="text-xl font-extrabold tracking-tight">RentLite</span>
+          <span className="text-xl font-extrabold tracking-tight">Manage Homestay</span>
         </div>
 
         <div className="max-w-md space-y-6">
-          <p className="eyebrow text-signal">Property Management</p>
+          <p className="eyebrow text-signal">Homestay &amp; Rental Management</p>
           <h1 className="hero-title text-white">
-            Manage your properties with&nbsp;ease.
+            Run your homestays and rentals with&nbsp;ease.
           </h1>
           <p className="text-lg leading-relaxed text-slate-400">
-            Track tenants, collect rent, handle maintenance, and get real-time
+            Sync Airbnb, Booking.com and VRBO calendars, schedule turnovers, collect rent, and get real-time
             insights — all from one beautifully simple dashboard.
           </p>
         </div>
 
         <p className="text-sm text-slate-500">
-          &copy; {new Date().getFullYear()} RentLite. All rights reserved.
+          &copy; {new Date().getFullYear()} Appa Technologies Pty Ltd. All rights reserved.
         </p>
       </div>
 
@@ -70,7 +75,7 @@ export function Login() {
               <Building2 className="h-5 w-5 text-white" />
             </div>
             <span className="text-xl font-extrabold tracking-tight text-ink">
-              RentLite
+              Manage Homestay
             </span>
           </div>
 
@@ -129,11 +134,14 @@ export function Login() {
               </div>
             </div>
 
+            {captcha.element}
+
             <Button
               type="submit"
               variant="signal"
               size="lg"
               loading={loading}
+              disabled={!captcha.ready}
               className="w-full"
             >
               Sign in

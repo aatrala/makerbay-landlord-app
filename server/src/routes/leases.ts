@@ -1,12 +1,14 @@
-import { Router, type Request, type Response } from "express";
+import { Hono } from "hono";
+import type { AppEnv } from "../env.js";
 import { z } from "zod";
+import { partialUpdate } from "../lib/zod.js";
 import { eq, and } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { lease, unit, property, tenant as tenantTable } from "../db/schema.js";
 import { authMiddleware } from "../auth/middleware.js";
 
-const router = Router();
-router.use(authMiddleware);
+const router = new Hono<AppEnv>();
+router.use("*", authMiddleware);
 
 const leaseSchema = z.object({
   unitId: z.string().uuid(),
@@ -21,8 +23,8 @@ const leaseSchema = z.object({
 });
 
 // GET /api/leases
-router.get("/", async (req: Request, res: Response) => {
-  const userId = (req as any).userId as string;
+router.get("/", async (c) => {
+  const userId = c.get("userId");
   const leases = await db.query.lease.findMany({
     with: { unit: true, tenant: true },
   });
@@ -42,13 +44,13 @@ router.get("/", async (req: Request, res: Response) => {
     return propId && propertyIds.has(propId);
   });
 
-  res.json({ data: filtered });
+  return c.json({ data: filtered });
 });
 
 // GET /api/leases/expiring — leases expiring within N days
-router.get("/expiring", async (req: Request, res: Response) => {
-  const userId = (req as any).userId as string;
-  const days = Number(req.query.days) || 90;
+router.get("/expiring", async (c) => {
+  const userId = c.get("userId");
+  const days = Number(c.req.query("days")) || 90;
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() + days);
 
@@ -72,24 +74,24 @@ router.get("/expiring", async (req: Request, res: Response) => {
     return endDate <= cutoff && endDate >= new Date();
   });
 
-  res.json({ data: expiring });
+  return c.json({ data: expiring });
 });
 
 // GET /api/leases/:id
-router.get("/:id", async (req: Request, res: Response) => {
+router.get("/:id", async (c) => {
   const l = await db.query.lease.findFirst({
-    where: eq(lease.id, (req.params.id as string)),
+    where: eq(lease.id, c.req.param("id")),
     with: { unit: true, tenant: true },
   });
-  if (!l) return res.status(404).json({ message: "Not found", code: "NOT_FOUND" });
-  res.json({ data: l });
+  if (!l) return c.json({ message: "Not found", code: "NOT_FOUND" }, 404);
+  return c.json({ data: l });
 });
 
 // POST /api/leases
-router.post("/", async (req: Request, res: Response) => {
-  const userId = (req as any).userId as string;
-  const parsed = leaseSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ message: "Validation error", code: "VALIDATION", details: parsed.error.flatten() });
+router.post("/", async (c) => {
+  const userId = c.get("userId");
+  const parsed = leaseSchema.safeParse(c.get("body"));
+  if (!parsed.success) return c.json({ message: "Validation error", code: "VALIDATION", details: parsed.error.flatten() }, 400);
 
   // Verify unit and tenant ownership
   const u = await db.query.unit.findFirst({
@@ -97,34 +99,34 @@ router.post("/", async (req: Request, res: Response) => {
     with: { property: true },
   });
   if (!u || (u as any).property.userId !== userId) {
-    return res.status(404).json({ message: "Unit not found", code: "NOT_FOUND" });
+    return c.json({ message: "Unit not found", code: "NOT_FOUND" }, 404);
   }
 
   const t = await db.query.tenant.findFirst({
     where: and(eq(tenantTable.id, parsed.data.tenantId), eq(tenantTable.userId, userId)),
   });
-  if (!t) return res.status(404).json({ message: "Tenant not found", code: "NOT_FOUND" });
+  if (!t) return c.json({ message: "Tenant not found", code: "NOT_FOUND" }, 404);
 
   const [created] = await db.insert(lease).values(parsed.data).returning();
 
   // Update unit status to occupied
   await db.update(unit).set({ status: "occupied" }).where(eq(unit.id, parsed.data.unitId));
 
-  res.status(201).json({ data: created });
+  return c.json({ data: created }, 201);
 });
 
 // PUT /api/leases/:id
-router.put("/:id", async (req: Request, res: Response) => {
-  const parsed = leaseSchema.partial().safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ message: "Validation error", code: "VALIDATION", details: parsed.error.flatten() });
+router.put("/:id", async (c) => {
+  const parsed = partialUpdate(leaseSchema).safeParse(c.get("body"));
+  if (!parsed.success) return c.json({ message: "Validation error", code: "VALIDATION", details: parsed.error.flatten() }, 400);
 
-  const existing = await db.query.lease.findFirst({ where: eq(lease.id, (req.params.id as string)) });
-  if (!existing) return res.status(404).json({ message: "Not found", code: "NOT_FOUND" });
+  const existing = await db.query.lease.findFirst({ where: eq(lease.id, c.req.param("id")) });
+  if (!existing) return c.json({ message: "Not found", code: "NOT_FOUND" }, 404);
 
   const [updated] = await db
     .update(lease)
     .set({ ...parsed.data, updatedAt: new Date() })
-    .where(eq(lease.id, (req.params.id as string)))
+    .where(eq(lease.id, c.req.param("id")))
     .returning();
 
   // If lease terminated/expired, update unit status
@@ -132,15 +134,15 @@ router.put("/:id", async (req: Request, res: Response) => {
     await db.update(unit).set({ status: "vacant" }).where(eq(unit.id, existing.unitId));
   }
 
-  res.json({ data: updated });
+  return c.json({ data: updated });
 });
 
 // DELETE /api/leases/:id
-router.delete("/:id", async (req: Request, res: Response) => {
-  const existing = await db.query.lease.findFirst({ where: eq(lease.id, (req.params.id as string)) });
-  if (!existing) return res.status(404).json({ message: "Not found", code: "NOT_FOUND" });
-  await db.delete(lease).where(eq(lease.id, (req.params.id as string)));
-  res.json({ message: "Deleted" });
+router.delete("/:id", async (c) => {
+  const existing = await db.query.lease.findFirst({ where: eq(lease.id, c.req.param("id")) });
+  if (!existing) return c.json({ message: "Not found", code: "NOT_FOUND" }, 404);
+  await db.delete(lease).where(eq(lease.id, c.req.param("id")));
+  return c.json({ message: "Deleted" });
 });
 
 export { router as leasesRouter };

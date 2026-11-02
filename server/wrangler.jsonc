@@ -1,0 +1,77 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "managehomestay",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-10-01",
+  // nodejs_compat: postgres.js, better-auth, stripe, AsyncLocalStorage, and
+  // process.env populated from vars/secrets.
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": true,
+  "observability": { "enabled": true },
+
+  // React client (Vite build). /api/* goes to the Worker, everything else is
+  // served as static assets with SPA fallback.
+  "assets": {
+    "directory": "../client/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": true
+  },
+
+  // Neon Postgres through Hyperdrive. Replace the id after running
+  // `wrangler hyperdrive create` (see DEPLOY.md). localConnectionString is
+  // used by `wrangler dev`.
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "2e014a8eac5a457dae789874ec7a35f5",
+      "localConnectionString": "postgres://postgres:postgres@localhost:5432/managehomestay"
+    }
+  ],
+
+  // Uploads (maintenance photos, receipts, lease docs) — replaces multer + disk.
+  "r2_buckets": [{ "binding": "UPLOADS", "bucket_name": "managehomestay-uploads" }],
+
+  // Daily at 02:30 UTC (08:00 IST): iCal import, rent reminders, STR digests.
+  "triggers": { "crons": ["30 2 * * *"] },
+
+  // Non-secret config. Secrets: see DEPLOY.md (wrangler secret put ...).
+  "routes": [
+    { "pattern": "managehomestay.com", "custom_domain": true },
+    // www has a proxied placeholder DNS record; the Worker 301s it to the apex.
+    { "pattern": "www.managehomestay.com/*", "zone_name": "managehomestay.com" }
+  ],
+  "vars": {
+    "APP_URL": "https://managehomestay.com",
+    "BETTER_AUTH_URL": "https://managehomestay.com",
+    "EXTRA_ORIGINS": "https://www.managehomestay.com,https://managehomestay.aatrala.workers.dev",
+    "EMAIL_FROM": "Manage Homestay <noreply@send.managehomestay.com>",
+    "TURNSTILE_SITE_KEY": "0x4AAAAAAFxAC9O0LvhR23pN"
+  }
+
+  ,
+  // Test-mode preview: `pnpm exec wrangler deploy --env preview` -> managehomestay-preview.aatrala.workers.dev
+  // No routes, no crons, no Turnstile. Holds NO live secrets: add Stripe TEST keys with
+  // `wrangler secret put ... --env preview`. NOTE: shares the production Hyperdrive/DB and R2
+  // unless you point HYPERDRIVE at a Neon branch.
+  "env": {
+    "preview": {
+      "name": "managehomestay-preview",
+      "workers_dev": true,
+      "routes": [],
+      "triggers": { "crons": [] },
+      "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "2e014a8eac5a457dae789874ec7a35f5" }],
+      "r2_buckets": [{ "binding": "UPLOADS", "bucket_name": "managehomestay-uploads" }],
+      "vars": {
+        "APP_URL": "https://managehomestay-preview.aatrala.workers.dev",
+        "BETTER_AUTH_URL": "https://managehomestay-preview.aatrala.workers.dev",
+        "EXTRA_ORIGINS": "",
+        "EMAIL_FROM": "Manage Homestay Preview <noreply@send.managehomestay.com>"
+      }
+    }
+  }
+
+  // Custom domain is attached in DEPLOY.md step 7 (not here) so that a
+  // deploy never takes over the apex by accident.
+}

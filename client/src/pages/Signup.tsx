@@ -1,12 +1,15 @@
 import { useState, type FormEvent } from "react";
 import { Link, useLocation } from "wouter";
-import { signUp } from "../lib/auth-client";
+import { getSession, signUp } from "../lib/auth-client";
+import { completeAuthRedirect } from "../lib/post-auth";
 import { Button } from "../components/ui/Button";
 import { Input, Label } from "../components/ui/Input";
 import { Building2, Eye, EyeOff, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
+import { useTurnstile } from "../components/auth/Turnstile";
 
 export function Signup() {
+  const captcha = useTurnstile();
   const [, setLocation] = useLocation();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -31,15 +34,17 @@ export function Signup() {
     setLoading(true);
 
     try {
-      const result = await signUp.email({ name, email, password });
+      const result = await signUp.email({ name, email, password }, { headers: captcha.headers() });
 
       if (result.error) {
+        captcha.reset();
         toast.error(result.error.message || "Failed to create account");
         return;
       }
 
       toast.success("Account created successfully!");
-      setLocation("/");
+      const ok = await completeAuthRedirect({ getSession: () => getSession(), navigate: (to) => window.location.assign(to) });
+      if (!ok) setLocation("/");
     } catch {
       toast.error("Something went wrong. Please try again.");
     } finally {
@@ -55,22 +60,22 @@ export function Signup() {
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-signal">
             <Building2 className="h-5 w-5 text-white" />
           </div>
-          <span className="text-xl font-extrabold tracking-tight">RentLite</span>
+          <span className="text-xl font-extrabold tracking-tight">Manage Homestay</span>
         </div>
 
         <div className="max-w-md space-y-6">
-          <p className="eyebrow text-signal">Property Management</p>
+          <p className="eyebrow text-signal">Homestay &amp; Rental Management</p>
           <h1 className="hero-title text-white">
             Start managing smarter today.
           </h1>
           <p className="text-lg leading-relaxed text-slate-400">
             Join thousands of landlords who simplify their property management
-            with RentLite. Get started in minutes.
+            with Manage Homestay. Get started in minutes.
           </p>
         </div>
 
         <p className="text-sm text-slate-500">
-          &copy; {new Date().getFullYear()} RentLite. All rights reserved.
+          &copy; {new Date().getFullYear()} Appa Technologies Pty Ltd. All rights reserved.
         </p>
       </div>
 
@@ -83,7 +88,7 @@ export function Signup() {
               <Building2 className="h-5 w-5 text-white" />
             </div>
             <span className="text-xl font-extrabold tracking-tight text-ink">
-              RentLite
+              Manage Homestay
             </span>
           </div>
 
@@ -166,11 +171,14 @@ export function Signup() {
               />
             </div>
 
+            {captcha.element}
+
             <Button
               type="submit"
               variant="signal"
               size="lg"
               loading={loading}
+              disabled={!captcha.ready}
               className="w-full"
             >
               Create account

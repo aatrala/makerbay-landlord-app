@@ -9,6 +9,8 @@ import {
   uuid,
   jsonb,
   date,
+  uniqueIndex,
+  index,
 } from "drizzle-orm/pg-core";
 
 // ── Enums ──
@@ -415,4 +417,228 @@ export const subscription = pgTable("subscription", {
   stripeSubscriptionId: text("stripe_subscription_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// ════════════════════════════════════════════════════════════════════
+// Short-term rentals (STR)
+// ════════════════════════════════════════════════════════════════════
+
+export const bookingSourceEnum = pgEnum("booking_source", [
+  "direct",
+  "airbnb",
+  "booking_com",
+  "vrbo",
+  "other",
+]);
+
+export const bookingStatusEnum = pgEnum("booking_status", [
+  "tentative",
+  "confirmed",
+  "blocked",
+  "cancelled",
+]);
+
+export const turnoverStatusEnum = pgEnum("turnover_status", [
+  "pending",
+  "assigned",
+  "in_progress",
+  "done",
+  "cancelled",
+]);
+
+export const guestMessageStatusEnum = pgEnum("guest_message_status", [
+  "draft",
+  "sent",
+  "failed",
+]);
+
+// ── Homeowners (owners of homes you manage, for owner statements) ──
+
+export const homeowner = pgTable("homeowner", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  email: text("email"),
+  // Default management fee (% of accommodation revenue) for this owner's listings
+  managementFeePct: real("management_fee_pct").notNull().default(0),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// ── Listings (an STR configuration on top of an existing unit) ──
+
+export const listing = pgTable(
+  "listing",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    propertyId: uuid("property_id")
+      .notNull()
+      .references(() => property.id, { onDelete: "cascade" }),
+    unitId: uuid("unit_id")
+      .notNull()
+      .references(() => unit.id, { onDelete: "cascade" }),
+    homeownerId: uuid("homeowner_id").references(() => homeowner.id, {
+      onDelete: "set null",
+    }),
+    name: text("name").notNull(),
+    nightlyRate: real("nightly_rate").notNull(),
+    minStay: integer("min_stay").notNull().default(1),
+    cleaningFee: real("cleaning_fee").notNull().default(0),
+    maxGuests: integer("max_guests"),
+    houseRules: text("house_rules"),
+    checkInTime: text("check_in_time").notNull().default("15:00"),
+    checkOutTime: text("check_out_time").notNull().default("10:00"),
+    checkInInstructions: text("check_in_instructions"),
+    // Overrides homeowner.managementFeePct when set
+    managementFeePct: real("management_fee_pct"),
+    // Secret token for the public .ics export URL
+    icalToken: text("ical_token").notNull(),
+    active: boolean("active").notNull().default(true),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("listing_unit_unique").on(t.unitId),
+    uniqueIndex("listing_ical_token_unique").on(t.icalToken),
+  ],
+);
+
+// ── Guests ──
+
+export const guest = pgTable("guest", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  firstName: text("first_name").notNull(),
+  lastName: text("last_name"),
+  email: text("email"),
+  phone: text("phone"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// ── iCal feeds to import (Airbnb / Booking.com / VRBO) ──
+
+export const calendarFeed = pgTable("calendar_feed", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  listingId: uuid("listing_id")
+    .notNull()
+    .references(() => listing.id, { onDelete: "cascade" }),
+  source: bookingSourceEnum("source").notNull(),
+  url: text("url").notNull(),
+  lastSyncedAt: timestamp("last_synced_at"),
+  lastStatus: text("last_status"),
+  lastError: text("last_error"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// ── Bookings / reservations / blocks ──
+
+export const booking = pgTable(
+  "booking",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    listingId: uuid("listing_id")
+      .notNull()
+      .references(() => listing.id, { onDelete: "cascade" }),
+    guestId: uuid("guest_id").references(() => guest.id, { onDelete: "set null" }),
+    calendarFeedId: uuid("calendar_feed_id").references(() => calendarFeed.id, {
+      onDelete: "set null",
+    }),
+    source: bookingSourceEnum("source").notNull().default("direct"),
+    status: bookingStatusEnum("status").notNull().default("confirmed"),
+    // [checkIn, checkOut) — checkout day is free for the next arrival
+    checkIn: date("check_in").notNull(),
+    checkOut: date("check_out").notNull(),
+    numGuests: integer("num_guests"),
+    accommodationTotal: real("accommodation_total").notNull().default(0),
+    cleaningFee: real("cleaning_fee").notNull().default(0),
+    // Channel commission / payment processing fees
+    platformFee: real("platform_fee").notNull().default(0),
+    taxes: real("taxes").notNull().default(0),
+    externalUid: text("external_uid"),
+    summary: text("summary"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("booking_listing_uid_unique").on(t.listingId, t.externalUid),
+    index("booking_listing_dates_idx").on(t.listingId, t.checkIn, t.checkOut),
+  ],
+);
+
+// ── Cleaning / turnover tasks (auto-created per checkout) ──
+
+export const turnoverTask = pgTable(
+  "turnover_task",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    listingId: uuid("listing_id")
+      .notNull()
+      .references(() => listing.id, { onDelete: "cascade" }),
+    bookingId: uuid("booking_id").references(() => booking.id, {
+      onDelete: "cascade",
+    }),
+    vendorId: uuid("vendor_id").references(() => vendor.id, { onDelete: "set null" }),
+    dueDate: date("due_date").notNull(),
+    // Next arrival on the same day, if any (tight turnover)
+    nextCheckIn: date("next_check_in"),
+    status: turnoverStatusEnum("status").notNull().default("pending"),
+    cost: real("cost"),
+    notes: text("notes"),
+    completedAt: timestamp("completed_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("turnover_booking_unique").on(t.bookingId)],
+);
+
+// ── Guest message templates & sent messages ──
+
+export const messageTemplate = pgTable("message_template", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  subject: text("subject").notNull(),
+  // Supports {{guest_name}}, {{listing_name}}, {{check_in}}, {{check_out}},
+  // {{check_in_time}}, {{check_out_time}}, {{address}}, {{house_rules}},
+  // {{check_in_instructions}}, {{nights}}
+  body: text("body").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const guestMessage = pgTable("guest_message", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  bookingId: uuid("booking_id").references(() => booking.id, { onDelete: "set null" }),
+  templateId: uuid("template_id").references(() => messageTemplate.id, {
+    onDelete: "set null",
+  }),
+  recipient: text("recipient").notNull(),
+  subject: text("subject").notNull(),
+  body: text("body").notNull(),
+  status: guestMessageStatusEnum("status").notNull().default("draft"),
+  error: text("error"),
+  sentAt: timestamp("sent_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });

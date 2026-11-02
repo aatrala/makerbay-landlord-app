@@ -1,15 +1,16 @@
-import { Router, type Request, type Response } from "express";
+import { Hono } from "hono";
+import type { AppEnv } from "../env.js";
 import { eq } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { property, unit, tenant, lease, payment, maintenanceRequest, expense } from "../db/schema.js";
 import { authMiddleware } from "../auth/middleware.js";
 
-const router = Router();
-router.use(authMiddleware);
+const router = new Hono<AppEnv>();
+router.use("*", authMiddleware);
 
 // GET /api/dashboard — overview stats for landlord
-router.get("/", async (req: Request, res: Response) => {
-  const userId = (req as any).userId as string;
+router.get("/", async (c) => {
+  const userId = c.get("userId");
 
   const properties = await db.query.property.findMany({
     where: eq(property.userId, userId),
@@ -79,7 +80,7 @@ router.get("/", async (req: Request, res: Response) => {
     return end >= now && end <= cutoff;
   }).length;
 
-  res.json({
+  return c.json({
     data: {
       properties: {
         total: properties.length,

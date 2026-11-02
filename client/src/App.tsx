@@ -16,6 +16,9 @@ import { TenantPayments } from "./pages/TenantPayments";
 import { TenantMaintenance } from "./pages/TenantMaintenance";
 import { TenantLease } from "./pages/TenantLease";
 import { NotFound } from "./pages/NotFound";
+import { Listings } from "./pages/str/Listings";
+import { Bookings } from "./pages/str/Bookings";
+import { Guests, Turnovers, StrReports, Owners, Messages } from "./pages/str/Operations";
 import { Loader2 } from "lucide-react";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -62,6 +65,41 @@ export default function App() {
       <Route path="/">
         <ProtectedRoute>
           <Dashboard />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/str/listings">
+        <ProtectedRoute>
+          <Listings />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/str/bookings">
+        <ProtectedRoute>
+          <Bookings />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/str/guests">
+        <ProtectedRoute>
+          <Guests />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/str/turnovers">
+        <ProtectedRoute>
+          <Turnovers />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/str/reports">
+        <ProtectedRoute>
+          <StrReports />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/str/messages">
+        <ProtectedRoute>
+          <Messages />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/str/owners">
+        <ProtectedRoute>
+          <Owners />
         </ProtectedRoute>
       </Route>
       <Route path="/properties">

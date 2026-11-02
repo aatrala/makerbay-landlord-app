@@ -1,12 +1,14 @@
-import { Router, type Request, type Response } from "express";
+import { Hono } from "hono";
+import type { AppEnv } from "../env.js";
 import { z } from "zod";
+import { partialUpdate } from "../lib/zod.js";
 import { eq } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { vendor } from "../db/schema.js";
 import { authMiddleware } from "../auth/middleware.js";
 
-const router = Router();
-router.use(authMiddleware);
+const router = new Hono<AppEnv>();
+router.use("*", authMiddleware);
 
 const vendorSchema = z.object({
   name: z.string().min(1),
@@ -18,53 +20,53 @@ const vendorSchema = z.object({
 });
 
 // GET /api/vendors
-router.get("/", async (req: Request, res: Response) => {
-  const userId = (req as any).userId as string;
+router.get("/", async (c) => {
+  const userId = c.get("userId");
   const vendors = await db.query.vendor.findMany({
     where: eq(vendor.userId, userId),
     orderBy: (v, { asc }) => [asc(v.name)],
   });
-  res.json({ data: vendors });
+  return c.json({ data: vendors });
 });
 
 // POST /api/vendors
-router.post("/", async (req: Request, res: Response) => {
-  const userId = (req as any).userId as string;
-  const parsed = vendorSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ message: "Validation error", code: "VALIDATION", details: parsed.error.flatten() });
+router.post("/", async (c) => {
+  const userId = c.get("userId");
+  const parsed = vendorSchema.safeParse(c.get("body"));
+  if (!parsed.success) return c.json({ message: "Validation error", code: "VALIDATION", details: parsed.error.flatten() }, 400);
 
   const [created] = await db.insert(vendor).values({ userId, ...parsed.data }).returning();
-  res.status(201).json({ data: created });
+  return c.json({ data: created }, 201);
 });
 
 // PUT /api/vendors/:id
-router.put("/:id", async (req: Request, res: Response) => {
-  const userId = (req as any).userId as string;
-  const parsed = vendorSchema.partial().safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ message: "Validation error", code: "VALIDATION", details: parsed.error.flatten() });
+router.put("/:id", async (c) => {
+  const userId = c.get("userId");
+  const parsed = partialUpdate(vendorSchema).safeParse(c.get("body"));
+  if (!parsed.success) return c.json({ message: "Validation error", code: "VALIDATION", details: parsed.error.flatten() }, 400);
 
   const existing = await db.query.vendor.findFirst({
-    where: (v, { and }) => and(eq(v.id, (req.params.id as string)), eq(v.userId, userId)),
+    where: (v, { and }) => and(eq(v.id, c.req.param("id")), eq(v.userId, userId)),
   });
-  if (!existing) return res.status(404).json({ message: "Not found", code: "NOT_FOUND" });
+  if (!existing) return c.json({ message: "Not found", code: "NOT_FOUND" }, 404);
 
   const [updated] = await db
     .update(vendor)
     .set({ ...parsed.data, updatedAt: new Date() })
-    .where(eq(vendor.id, (req.params.id as string)))
+    .where(eq(vendor.id, c.req.param("id")))
     .returning();
-  res.json({ data: updated });
+  return c.json({ data: updated });
 });
 
 // DELETE /api/vendors/:id
-router.delete("/:id", async (req: Request, res: Response) => {
-  const userId = (req as any).userId as string;
+router.delete("/:id", async (c) => {
+  const userId = c.get("userId");
   const existing = await db.query.vendor.findFirst({
-    where: (v, { and }) => and(eq(v.id, (req.params.id as string)), eq(v.userId, userId)),
+    where: (v, { and }) => and(eq(v.id, c.req.param("id")), eq(v.userId, userId)),
   });
-  if (!existing) return res.status(404).json({ message: "Not found", code: "NOT_FOUND" });
-  await db.delete(vendor).where(eq(vendor.id, (req.params.id as string)));
-  res.json({ message: "Deleted" });
+  if (!existing) return c.json({ message: "Not found", code: "NOT_FOUND" }, 404);
+  await db.delete(vendor).where(eq(vendor.id, c.req.param("id")));
+  return c.json({ message: "Deleted" });
 });
 
 export { router as vendorsRouter };

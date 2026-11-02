@@ -1,12 +1,14 @@
-import { Router, type Request, type Response } from "express";
+import { Hono } from "hono";
+import type { AppEnv } from "../env.js";
 import { z } from "zod";
+import { partialUpdate } from "../lib/zod.js";
 import { eq, and } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { unit, property } from "../db/schema.js";
 import { authMiddleware } from "../auth/middleware.js";
 
-const router = Router();
-router.use(authMiddleware);
+const router = new Hono<AppEnv>();
+router.use("*", authMiddleware);
 
 const createUnitSchema = z.object({
   propertyId: z.string().uuid(),
@@ -18,12 +20,12 @@ const createUnitSchema = z.object({
   notes: z.string().nullable().optional(),
 });
 
-const updateUnitSchema = createUnitSchema.partial().omit({ propertyId: true });
+const updateUnitSchema = partialUpdate(createUnitSchema.omit({ propertyId: true }));
 
 // GET /api/units?propertyId=xxx — list units (optionally by property)
-router.get("/", async (req: Request, res: Response) => {
-  const userId = (req as any).userId as string;
-  const propertyId = req.query.propertyId as string | undefined;
+router.get("/", async (c) => {
+  const userId = c.get("userId");
+  const propertyId = c.req.query("propertyId") as string | undefined;
 
   const userProperties = await db.query.property.findMany({
     where: eq(property.userId, userId),
@@ -46,77 +48,77 @@ router.get("/", async (req: Request, res: Response) => {
     ? allUnits
     : allUnits.filter((u) => propertyIds.includes(u.propertyId));
 
-  res.json({ data: filtered });
+  return c.json({ data: filtered });
 });
 
 // GET /api/units/:id
-router.get("/:id", async (req: Request, res: Response) => {
-  const userId = (req as any).userId as string;
+router.get("/:id", async (c) => {
+  const userId = c.get("userId");
   const u = await db.query.unit.findFirst({
-    where: eq(unit.id, (req.params.id as string)),
+    where: eq(unit.id, c.req.param("id")),
     with: { property: true },
   });
 
   if (!u || (u as any).property.userId !== userId) {
-    return res.status(404).json({ message: "Not found", code: "NOT_FOUND" });
+    return c.json({ message: "Not found", code: "NOT_FOUND" }, 404);
   }
 
-  res.json({ data: u });
+  return c.json({ data: u });
 });
 
 // POST /api/units
-router.post("/", async (req: Request, res: Response) => {
-  const userId = (req as any).userId as string;
-  const parsed = createUnitSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ message: "Validation error", code: "VALIDATION", details: parsed.error.flatten() });
+router.post("/", async (c) => {
+  const userId = c.get("userId");
+  const parsed = createUnitSchema.safeParse(c.get("body"));
+  if (!parsed.success) return c.json({ message: "Validation error", code: "VALIDATION", details: parsed.error.flatten() }, 400);
 
   // Verify property ownership
   const prop = await db.query.property.findFirst({
     where: (p, { and }) =>
       and(eq(p.id, parsed.data.propertyId), eq(p.userId, userId)),
   });
-  if (!prop) return res.status(404).json({ message: "Property not found", code: "NOT_FOUND" });
+  if (!prop) return c.json({ message: "Property not found", code: "NOT_FOUND" }, 404);
 
   const [created] = await db.insert(unit).values(parsed.data).returning();
-  res.status(201).json({ data: created });
+  return c.json({ data: created }, 201);
 });
 
 // PUT /api/units/:id
-router.put("/:id", async (req: Request, res: Response) => {
-  const userId = (req as any).userId as string;
-  const parsed = updateUnitSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ message: "Validation error", code: "VALIDATION", details: parsed.error.flatten() });
+router.put("/:id", async (c) => {
+  const userId = c.get("userId");
+  const parsed = updateUnitSchema.safeParse(c.get("body"));
+  if (!parsed.success) return c.json({ message: "Validation error", code: "VALIDATION", details: parsed.error.flatten() }, 400);
 
   const existing = await db.query.unit.findFirst({
-    where: eq(unit.id, (req.params.id as string)),
+    where: eq(unit.id, c.req.param("id")),
     with: { property: true },
   });
   if (!existing || (existing as any).property.userId !== userId) {
-    return res.status(404).json({ message: "Not found", code: "NOT_FOUND" });
+    return c.json({ message: "Not found", code: "NOT_FOUND" }, 404);
   }
 
   const [updated] = await db
     .update(unit)
     .set({ ...parsed.data, updatedAt: new Date() })
-    .where(eq(unit.id, (req.params.id as string)))
+    .where(eq(unit.id, c.req.param("id")))
     .returning();
 
-  res.json({ data: updated });
+  return c.json({ data: updated });
 });
 
 // DELETE /api/units/:id
-router.delete("/:id", async (req: Request, res: Response) => {
-  const userId = (req as any).userId as string;
+router.delete("/:id", async (c) => {
+  const userId = c.get("userId");
   const existing = await db.query.unit.findFirst({
-    where: eq(unit.id, (req.params.id as string)),
+    where: eq(unit.id, c.req.param("id")),
     with: { property: true },
   });
   if (!existing || (existing as any).property.userId !== userId) {
-    return res.status(404).json({ message: "Not found", code: "NOT_FOUND" });
+    return c.json({ message: "Not found", code: "NOT_FOUND" }, 404);
   }
 
-  await db.delete(unit).where(eq(unit.id, (req.params.id as string)));
-  res.json({ message: "Deleted" });
+  await db.delete(unit).where(eq(unit.id, c.req.param("id")));
+  return c.json({ message: "Deleted" });
 });
 
 export { router as unitsRouter };
