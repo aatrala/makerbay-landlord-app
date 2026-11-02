@@ -12,8 +12,14 @@ function connectionString(env: Bindings) {
 export default {
   async fetch(request: Request, env: Bindings, ctx: ExecutionContext) {
     const url = new URL(request.url);
+    // www -> apex, keeping path and query.
+    if (url.hostname === "www.managehomestay.com") {
+      url.hostname = "managehomestay.com";
+      url.protocol = "https:";
+      return Response.redirect(url.toString(), 301);
+    }
     if (!url.pathname.startsWith("/api/")) {
-      // Static assets normally answer before the Worker runs; this is a fallback.
+      // The Worker runs first (for the www redirect); everything else is static/SPA.
       return env.ASSETS ? env.ASSETS.fetch(request) : new Response("Not found", { status: 404 });
     }
     const { db, close } = await createPostgresDb(connectionString(env));
