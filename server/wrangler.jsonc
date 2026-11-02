@@ -37,6 +37,7 @@
   "triggers": { "crons": ["30 2 * * *"] },
 
   // Non-secret config. Secrets: see DEPLOY.md (wrangler secret put ...).
+  "routes": [{ "pattern": "managehomestay.com", "custom_domain": true }],
   "vars": {
     "APP_URL": "https://managehomestay.com",
     "BETTER_AUTH_URL": "https://managehomestay.com",
