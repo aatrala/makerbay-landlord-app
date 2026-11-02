@@ -1,68 +1,47 @@
-import dotenv from "dotenv";
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import * as schema from "./schema.js";
 import * as relations from "./relations.js";
 
-// This module is imported before the application entry point under ESM, so load
-// the root environment file here before creating the database connection.
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const envPaths = [
-  path.resolve(__dirname, "../../../.env"), // server/src -> project root
-  path.resolve(__dirname, "../../.env"), // server (compiled) -> project root
-  path.resolve(process.cwd(), "../.env"), // CWD server -> project root
-  path.resolve(process.cwd(), ".env"), // CWD project root
-];
-for (const p of envPaths) {
-  if (fs.existsSync(p)) {
-    dotenv.config({ path: p });
-    break;
-  }
+export const fullSchema = { ...schema, ...relations };
+export type AppDatabase = PostgresJsDatabase<typeof fullSchema>;
+
+/**
+ * Workers forbid sharing I/O objects (DB sockets) between requests, so each
+ * request/cron invocation gets its own client via AsyncLocalStorage. Route code
+ * keeps importing `db` and the proxy resolves to the current request's client.
+ */
+const storage = new AsyncLocalStorage<AppDatabase>();
+let defaultDb: AppDatabase | undefined;
+
+export function setDefaultDb(d: AppDatabase | undefined) {
+  defaultDb = d;
 }
 
-const connectionString = process.env.DATABASE_URL;
-
-if (!connectionString) {
-  throw new Error(
-    "DATABASE_URL is required. Copy .env.example to .env and configure PostgreSQL, or set DATABASE_URL=pglite://./pgdata to run on an embedded database.",
-  );
+export function runWithDb<T>(d: AppDatabase, fn: () => T): T {
+  return storage.run(d, fn);
 }
 
-// Embedded PGlite database (no external Postgres required). Useful for local
-// development and demos where Docker/Postgres are not available.
-export const isPglite = connectionString.startsWith("pglite:");
+export function currentDb(): AppDatabase {
+  const d = storage.getStore() ?? defaultDb;
+  if (!d) throw new Error("No database bound for this request");
+  return d;
+}
 
-type AppDatabase = PostgresJsDatabase<typeof schema & typeof relations>;
+export const db: AppDatabase = new Proxy({} as AppDatabase, {
+  get(_t, prop) {
+    const d = currentDb() as any;
+    const v = d[prop];
+    return typeof v === "function" ? v.bind(d) : v;
+  },
+});
 
-let db!: AppDatabase;
-
-if (isPglite) {
-  const { PGlite } = await import("@electric-sql/pglite");
-  const { drizzle: drizzlePglite } = await import("drizzle-orm/pglite");
-  const dataDir = connectionString.slice("pglite:".length) || "pgdata";
-  // Anchor relative paths to the server package. Compiled output lives at
-  // server/dist/db while source lives at server/src/db, so resolve against
-  // whichever marker exists to keep one shared database per install.
-  const packageRoot = fs.existsSync(path.resolve(__dirname, "../../package.json"))
-    ? path.resolve(__dirname, "../..") // compiled: server/dist/db -> server
-    : path.resolve(__dirname, "../../.."); // source: server/src/db -> server
-  const resolvedDir = path.isAbsolute(dataDir)
-    ? dataDir
-    : path.resolve(packageRoot, dataDir);
-  const client = new PGlite(resolvedDir);
-  db = drizzlePglite(client, {
-    schema: { ...schema, ...relations },
-  }) as unknown as AppDatabase;
-
-  const { migratePglite } = await import("./migrate.js");
-  await migratePglite(client);
-} else {
+/** Postgres (Neon via Hyperdrive on Workers, or any DATABASE_URL in Node). */
+export async function createPostgresDb(connectionString: string) {
   const postgres = (await import("postgres")).default;
-  const client = postgres(connectionString);
-  db = drizzle(client, { schema: { ...schema, ...relations } });
+  const client = postgres(connectionString, { max: 5, fetch_types: false });
+  const d = drizzle(client, { schema: fullSchema });
+  return { db: d, close: () => client.end({ timeout: 5 }) };
 }
 
-export { db };
-export type Database = typeof db;
+export type Database = AppDatabase;

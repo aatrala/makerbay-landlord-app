@@ -1,12 +1,14 @@
-import { Router, type Request, type Response } from "express";
+import { Hono } from "hono";
+import type { AppEnv } from "../env.js";
 import { z } from "zod";
+import { partialUpdate } from "../lib/zod.js";
 import { eq } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { property, unit } from "../db/schema.js";
 import { authMiddleware } from "../auth/middleware.js";
 
-const router = Router();
-router.use(authMiddleware);
+const router = new Hono<AppEnv>();
+router.use("*", authMiddleware);
 
 const createPropertySchema = z.object({
   name: z.string().min(1),
@@ -20,36 +22,36 @@ const createPropertySchema = z.object({
   notes: z.string().nullable().optional(),
 });
 
-const updatePropertySchema = createPropertySchema.partial();
+const updatePropertySchema = partialUpdate(createPropertySchema);
 
 // GET /api/properties — list all properties for user
-router.get("/", async (req: Request, res: Response) => {
-  const userId = (req as any).userId as string;
+router.get("/", async (c) => {
+  const userId = c.get("userId");
   const properties = await db.query.property.findMany({
     where: eq(property.userId, userId),
     with: { units: true },
     orderBy: (p, { desc }) => [desc(p.createdAt)],
   });
-  res.json({ data: properties });
+  return c.json({ data: properties });
 });
 
 // GET /api/properties/:id — get single property
-router.get("/:id", async (req: Request, res: Response) => {
-  const userId = (req as any).userId as string;
+router.get("/:id", async (c) => {
+  const userId = c.get("userId");
   const p = await db.query.property.findFirst({
     where: (prop, { and }) =>
-      and(eq(prop.id, (req.params.id as string)), eq(prop.userId, userId)),
+      and(eq(prop.id, c.req.param("id")), eq(prop.userId, userId)),
     with: { units: true },
   });
-  if (!p) return res.status(404).json({ message: "Not found", code: "NOT_FOUND" });
-  res.json({ data: p });
+  if (!p) return c.json({ message: "Not found", code: "NOT_FOUND" }, 404);
+  return c.json({ data: p });
 });
 
 // POST /api/properties — create property
-router.post("/", async (req: Request, res: Response) => {
-  const userId = (req as any).userId as string;
-  const parsed = createPropertySchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ message: "Validation error", code: "VALIDATION", details: parsed.error.flatten() });
+router.post("/", async (c) => {
+  const userId = c.get("userId");
+  const parsed = createPropertySchema.safeParse(c.get("body"));
+  if (!parsed.success) return c.json({ message: "Validation error", code: "VALIDATION", details: parsed.error.flatten() }, 400);
 
   const [created] = await db
     .insert(property)
@@ -67,39 +69,39 @@ router.post("/", async (req: Request, res: Response) => {
     await db.insert(unit).values(units);
   }
 
-  res.status(201).json({ data: created });
+  return c.json({ data: created }, 201);
 });
 
 // PUT /api/properties/:id — update property
-router.put("/:id", async (req: Request, res: Response) => {
-  const userId = (req as any).userId as string;
-  const parsed = updatePropertySchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ message: "Validation error", code: "VALIDATION", details: parsed.error.flatten() });
+router.put("/:id", async (c) => {
+  const userId = c.get("userId");
+  const parsed = updatePropertySchema.safeParse(c.get("body"));
+  if (!parsed.success) return c.json({ message: "Validation error", code: "VALIDATION", details: parsed.error.flatten() }, 400);
 
   const existing = await db.query.property.findFirst({
-    where: (p, { and }) => and(eq(p.id, (req.params.id as string)), eq(p.userId, userId)),
+    where: (p, { and }) => and(eq(p.id, c.req.param("id")), eq(p.userId, userId)),
   });
-  if (!existing) return res.status(404).json({ message: "Not found", code: "NOT_FOUND" });
+  if (!existing) return c.json({ message: "Not found", code: "NOT_FOUND" }, 404);
 
   const [updated] = await db
     .update(property)
     .set({ ...parsed.data, updatedAt: new Date() })
-    .where(eq(property.id, (req.params.id as string)))
+    .where(eq(property.id, c.req.param("id")))
     .returning();
 
-  res.json({ data: updated });
+  return c.json({ data: updated });
 });
 
 // DELETE /api/properties/:id — delete property
-router.delete("/:id", async (req: Request, res: Response) => {
-  const userId = (req as any).userId as string;
+router.delete("/:id", async (c) => {
+  const userId = c.get("userId");
   const existing = await db.query.property.findFirst({
-    where: (p, { and }) => and(eq(p.id, (req.params.id as string)), eq(p.userId, userId)),
+    where: (p, { and }) => and(eq(p.id, c.req.param("id")), eq(p.userId, userId)),
   });
-  if (!existing) return res.status(404).json({ message: "Not found", code: "NOT_FOUND" });
+  if (!existing) return c.json({ message: "Not found", code: "NOT_FOUND" }, 404);
 
-  await db.delete(property).where(eq(property.id, (req.params.id as string)));
-  res.json({ message: "Deleted" });
+  await db.delete(property).where(eq(property.id, c.req.param("id")));
+  return c.json({ message: "Deleted" });
 });
 
 export { router as propertiesRouter };

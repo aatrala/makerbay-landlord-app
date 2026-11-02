@@ -1,37 +1,38 @@
-import { Router, type Request, type Response } from "express";
+import { Hono } from "hono";
+import type { AppEnv } from "../env.js";
 import { db } from "../db/index.js";
 import { authMiddleware } from "../auth/middleware.js";
 import { processRentReminders, getUpcomingPayments } from "../services/rent-reminders.js";
 
-const router = Router();
-router.use(authMiddleware);
+const router = new Hono<AppEnv>();
+router.use("*", authMiddleware);
 
 // POST /api/reminders/process — manually trigger rent reminder processing
-router.post("/process", async (req: Request, res: Response) => {
+router.post("/process", async (c) => {
   try {
     const result = await processRentReminders();
-    res.json({ data: result });
+    return c.json({ data: result });
   } catch (error) {
     console.error("[Reminders] Processing error:", error);
-    res.status(500).json({
+    return c.json({
       message: "Failed to process reminders",
       code: "REMINDER_ERROR",
-    });
+    }, 500);
   }
 });
 
 // GET /api/reminders/upcoming — get upcoming and overdue payments for landlord
-router.get("/upcoming", async (req: Request, res: Response) => {
-  const userId = (req as any).userId as string;
+router.get("/upcoming", async (c) => {
+  const userId = c.get("userId");
   try {
     const payments = await getUpcomingPayments(userId);
-    res.json({ data: payments });
+    return c.json({ data: payments });
   } catch (error) {
     console.error("[Reminders] Upcoming payments error:", error);
-    res.status(500).json({
+    return c.json({
       message: "Failed to fetch upcoming payments",
       code: "UPCOMING_ERROR",
-    });
+    }, 500);
   }
 });
 

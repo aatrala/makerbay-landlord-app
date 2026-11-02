@@ -1,11 +1,12 @@
-import { Router, type Request, type Response } from "express";
+import { Hono } from "hono";
+import type { AppEnv } from "../env.js";
 import { eq } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { property, unit, payment, expense } from "../db/schema.js";
 import { authMiddleware } from "../auth/middleware.js";
 
-const router = Router();
-router.use(authMiddleware);
+const router = new Hono<AppEnv>();
+router.use("*", authMiddleware);
 
 // Schedule E line-item mapping
 const SCHEDULE_E_LINES: Record<string, { line: number; description: string }> = {
@@ -26,9 +27,9 @@ const SCHEDULE_E_LINES: Record<string, { line: number; description: string }> = 
 };
 
 // GET /api/reports/cashflow — monthly cash flow per property
-router.get("/cashflow", async (req: Request, res: Response) => {
-  const userId = (req as any).userId as string;
-  const year = Number(req.query.year) || new Date().getFullYear();
+router.get("/cashflow", async (c) => {
+  const userId = c.get("userId");
+  const year = Number(c.req.query("year")) || new Date().getFullYear();
 
   const properties = await db.query.property.findMany({
     where: eq(property.userId, userId),
@@ -73,13 +74,13 @@ router.get("/cashflow", async (req: Request, res: Response) => {
     };
   });
 
-  res.json({ data: result });
+  return c.json({ data: result });
 });
 
 // GET /api/reports/schedule-e — Schedule E helper
-router.get("/schedule-e", async (req: Request, res: Response) => {
-  const userId = (req as any).userId as string;
-  const year = Number(req.query.year) || new Date().getFullYear();
+router.get("/schedule-e", async (c) => {
+  const userId = c.get("userId");
+  const year = Number(c.req.query("year")) || new Date().getFullYear();
 
   const properties = await db.query.property.findMany({
     where: eq(property.userId, userId),
@@ -125,14 +126,14 @@ router.get("/schedule-e", async (req: Request, res: Response) => {
     };
   }));
 
-  res.json({ data: result });
+  return c.json({ data: result });
 });
 
 // GET /api/reports/pnl — profit & loss per property
-router.get("/pnl", async (req: Request, res: Response) => {
-  const userId = (req as any).userId as string;
-  const year = Number(req.query.year) || new Date().getFullYear();
-  const quarter = req.query.quarter ? Number(req.query.quarter) : undefined;
+router.get("/pnl", async (c) => {
+  const userId = c.get("userId");
+  const year = Number(c.req.query("year")) || new Date().getFullYear();
+  const quarter = c.req.query("quarter") ? Number(c.req.query("quarter")) : undefined;
 
   const properties = await db.query.property.findMany({
     where: eq(property.userId, userId),
@@ -179,7 +180,7 @@ router.get("/pnl", async (req: Request, res: Response) => {
     };
   });
 
-  res.json({ data: result });
+  return c.json({ data: result });
 });
 
 export { router as reportsRouter };

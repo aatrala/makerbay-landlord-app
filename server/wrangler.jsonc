@@ -1,0 +1,49 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "managehomestay",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-10-01",
+  // nodejs_compat: postgres.js, better-auth, stripe, AsyncLocalStorage, and
+  // process.env populated from vars/secrets.
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": true,
+  "observability": { "enabled": true },
+
+  // React client (Vite build). /api/* goes to the Worker, everything else is
+  // served as static assets with SPA fallback.
+  "assets": {
+    "directory": "../client/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+
+  // Neon Postgres through Hyperdrive. Replace the id after running
+  // `wrangler hyperdrive create` (see DEPLOY.md). localConnectionString is
+  // used by `wrangler dev`.
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "REPLACE_WITH_HYPERDRIVE_ID",
+      "localConnectionString": "postgres://postgres:postgres@localhost:5432/managehomestay"
+    }
+  ],
+
+  // Uploads (maintenance photos, receipts, lease docs) — replaces multer + disk.
+  "r2_buckets": [{ "binding": "UPLOADS", "bucket_name": "managehomestay-uploads" }],
+
+  // Daily at 02:30 UTC (08:00 IST): iCal import, rent reminders, STR digests.
+  "triggers": { "crons": ["30 2 * * *"] },
+
+  // Non-secret config. Secrets: see DEPLOY.md (wrangler secret put ...).
+  "vars": {
+    "APP_URL": "https://managehomestay.com",
+    "BETTER_AUTH_URL": "https://managehomestay.com",
+    "EMAIL_FROM": "Manage Homestay <noreply@managehomestay.com>",
+    "TURNSTILE_SITE_KEY": ""
+  }
+
+  // Custom domain is attached in DEPLOY.md step 7 (not here) so that a
+  // deploy never takes over the apex by accident.
+}

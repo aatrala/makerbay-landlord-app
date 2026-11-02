@@ -1,17 +1,29 @@
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY || "re_test_placeholder");
+import { envVar } from "../env.js";
 
-const FROM_EMAIL = "RentLite <noreply@rentlite.app>";
+let client: Resend | undefined;
+function getResend() {
+  const key = envVar("RESEND_API_KEY");
+  if (!key) return null;
+  return (client ??= new Resend(key));
+}
+
+const fromEmail = () => envVar("EMAIL_FROM") || "Manage Homestay <noreply@managehomestay.com>";
 
 export async function sendEmail(params: {
   to: string;
   subject: string;
   html: string;
 }): Promise<{ success: boolean; error?: string }> {
+  const resend = getResend();
+  if (!resend) {
+    console.warn("[Resend] RESEND_API_KEY not set; email not sent:", params.subject);
+    return { success: false, error: "Email is not configured" };
+  }
   try {
     const result = await resend.emails.send({
-      from: FROM_EMAIL,
+      from: fromEmail(),
       to: params.to,
       subject: params.subject,
       html: params.html,
@@ -52,7 +64,7 @@ export function rentReminderEmail(params: {
         If you've already paid, please disregard this message.
       </p>
       <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
-      <p style="color: #94a3b8; font-size: 12px;">Sent via RentLite</p>
+      <p style="color: #94a3b8; font-size: 12px;">Sent via Manage Homestay</p>
     </div>
   `;
 }
@@ -80,7 +92,7 @@ export function rentReceiptEmail(params: {
         <tr><td style="padding: 8px 0; color: #64748b;">Method</td><td style="padding: 8px 0; color: #0f172a; font-weight: 600;">${params.method}</td></tr>
       </table>
       <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
-      <p style="color: #94a3b8; font-size: 12px;">Sent via RentLite</p>
+      <p style="color: #94a3b8; font-size: 12px;">Sent via Manage Homestay</p>
     </div>
   `;
 }
@@ -106,7 +118,7 @@ export function maintenanceUpdateEmail(params: {
         <strong>${statusLabels[params.status] || params.status}</strong>.
       </p>
       <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
-      <p style="color: #94a3b8; font-size: 12px;">Sent via RentLite</p>
+      <p style="color: #94a3b8; font-size: 12px;">Sent via Manage Homestay</p>
     </div>
   `;
 }

@@ -1,4 +1,5 @@
-import { Router, type Request, type Response } from "express";
+import { Hono } from "hono";
+import type { AppEnv } from "../env.js";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { db } from "../db/index.js";
@@ -6,12 +7,12 @@ import { maintenanceRequest, vendor, property } from "../db/schema.js";
 import { authMiddleware } from "../auth/middleware.js";
 import { triageMaintenanceRequest, findBestVendor } from "../services/ai-triage.js";
 
-const router = Router();
-router.use(authMiddleware);
+const router = new Hono<AppEnv>();
+router.use("*", authMiddleware);
 
 // POST /api/ai-triage/maintenance — AI-triage a maintenance request
-router.post("/maintenance", async (req: Request, res: Response) => {
-  const userId = (req as any).userId as string;
+router.post("/maintenance", async (c) => {
+  const userId = c.get("userId");
 
   const inputSchema = z.object({
     title: z.string().min(1),
@@ -25,13 +26,13 @@ router.post("/maintenance", async (req: Request, res: Response) => {
     tenantId: z.string().uuid().nullable().optional(),
   });
 
-  const parsed = inputSchema.safeParse(req.body);
+  const parsed = inputSchema.safeParse(c.get("body"));
   if (!parsed.success) {
-    return res.status(400).json({
+    return c.json({
       message: "Validation error",
       code: "VALIDATION",
       details: parsed.error.flatten(),
-    });
+    }, 400);
   }
 
   try {
@@ -68,7 +69,7 @@ router.post("/maintenance", async (req: Request, res: Response) => {
         .where(eq(maintenanceRequest.id, parsed.data.maintenanceId))
         .returning();
 
-      return res.json({
+      return c.json({
         data: {
           triage: triageResult,
           recommendedVendorId,
@@ -100,17 +101,17 @@ router.post("/maintenance", async (req: Request, res: Response) => {
         })
         .returning();
 
-      return res.status(201).json({
+      return c.json({
         data: {
           triage: triageResult,
           recommendedVendorId,
           created,
         },
-      });
+      }, 201);
     }
 
     // Just return triage result without creating/updating
-    return res.json({
+    return c.json({
       data: {
         triage: triageResult,
         recommendedVendorId,
@@ -118,10 +119,10 @@ router.post("/maintenance", async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error("[AI Triage] Error:", error);
-    return res.status(500).json({
+    return c.json({
       message: "AI triage failed",
       code: "TRIAGE_ERROR",
-    });
+    }, 500);
   }
 });
 

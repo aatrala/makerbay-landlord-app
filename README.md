@@ -1,18 +1,28 @@
-# RentLite — Simple Property Management
+# Manage Homestay
 
-RentLite is a property management app for small landlords: properties and units,
-tenants and leases, rent tracking, maintenance with AI triage, expenses,
-vendors, and a tenant portal.
+Manage Homestay (managehomestay.com, by Appa Technologies Pty Ltd) runs short-stay homestays and
+long-term rentals from one app, on Cloudflare Workers (Hono API + React SPA), Neon Postgres via
+Hyperdrive, R2 uploads and Resend email.
+
+**Short stays:** listings (nightly rate, min stay, cleaning fee, house rules, check-in/out times),
+booking calendar with conflict detection, iCal import/export (Airbnb, Booking.com, VRBO), guests,
+auto-created turnovers assignable to cleaners, per-listing income / occupancy / ADR reports, guest
+message templates (preview → draft → send via Resend), and monthly owner statements.
+
+**Long-term:** properties & units, tenants, leases, rent payments (Stripe), expenses,
+maintenance + AI triage, reminders and the tenant portal.
+
+See **[DEPLOY.md](DEPLOY.md)** for Cloudflare deployment. Tests: `pnpm test` (vitest + PGlite).
 
 ## Structure
 
 - `client/` — React + Vite frontend (landlord dashboard + tenant portal)
-- `server/` — Express API (Better-Auth, Drizzle ORM, Stripe, Resend, OpenAI)
+- `server/` — Hono API for Cloudflare Workers (Better-Auth, Drizzle ORM, Stripe, Resend, OpenAI)
 - `shared/` — shared TypeScript types
 
 ## Quick start (no Docker needed)
 
-Requires Node 20+. pnpm is enabled automatically via corepack:
+Requires Node 22+. pnpm is enabled automatically via corepack:
 
 ```bash
 corepack enable

@@ -1,12 +1,14 @@
-import { Router, type Request, type Response } from "express";
+import { Hono } from "hono";
+import type { AppEnv } from "../env.js";
 import { z } from "zod";
+import { partialUpdate } from "../lib/zod.js";
 import { eq, and } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { expense, property } from "../db/schema.js";
 import { authMiddleware } from "../auth/middleware.js";
 
-const router = Router();
-router.use(authMiddleware);
+const router = new Hono<AppEnv>();
+router.use("*", authMiddleware);
 
 const expenseSchema = z.object({
   propertyId: z.string().uuid(),
@@ -28,9 +30,9 @@ const expenseSchema = z.object({
 });
 
 // GET /api/expenses
-router.get("/", async (req: Request, res: Response) => {
-  const userId = (req as any).userId as string;
-  const { propertyId, category, year, month } = req.query;
+router.get("/", async (c) => {
+  const userId = c.get("userId");
+  const { propertyId, category, year, month } = c.req.query();
 
   const userProperties = await db.query.property.findMany({
     where: eq(property.userId, userId),
@@ -50,56 +52,56 @@ router.get("/", async (req: Request, res: Response) => {
     filtered = filtered.filter((e) => new Date(e.date).getMonth() + 1 === Number(month));
   }
 
-  res.json({ data: filtered });
+  return c.json({ data: filtered });
 });
 
 // GET /api/expenses/:id
-router.get("/:id", async (req: Request, res: Response) => {
+router.get("/:id", async (c) => {
   const e = await db.query.expense.findFirst({
-    where: eq(expense.id, (req.params.id as string)),
+    where: eq(expense.id, c.req.param("id")),
   });
-  if (!e) return res.status(404).json({ message: "Not found", code: "NOT_FOUND" });
-  res.json({ data: e });
+  if (!e) return c.json({ message: "Not found", code: "NOT_FOUND" }, 404);
+  return c.json({ data: e });
 });
 
 // POST /api/expenses
-router.post("/", async (req: Request, res: Response) => {
-  const parsed = expenseSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ message: "Validation error", code: "VALIDATION", details: parsed.error.flatten() });
+router.post("/", async (c) => {
+  const parsed = expenseSchema.safeParse(c.get("body"));
+  if (!parsed.success) return c.json({ message: "Validation error", code: "VALIDATION", details: parsed.error.flatten() }, 400);
 
   // Verify property ownership
-  const userId = (req as any).userId as string;
+  const userId = c.get("userId");
   const prop = await db.query.property.findFirst({
     where: and(eq(property.id, parsed.data.propertyId), eq(property.userId, userId)),
   });
-  if (!prop) return res.status(404).json({ message: "Property not found", code: "NOT_FOUND" });
+  if (!prop) return c.json({ message: "Property not found", code: "NOT_FOUND" }, 404);
 
   const [created] = await db.insert(expense).values(parsed.data).returning();
-  res.status(201).json({ data: created });
+  return c.json({ data: created }, 201);
 });
 
 // PUT /api/expenses/:id
-router.put("/:id", async (req: Request, res: Response) => {
-  const parsed = expenseSchema.partial().safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ message: "Validation error", code: "VALIDATION", details: parsed.error.flatten() });
+router.put("/:id", async (c) => {
+  const parsed = partialUpdate(expenseSchema).safeParse(c.get("body"));
+  if (!parsed.success) return c.json({ message: "Validation error", code: "VALIDATION", details: parsed.error.flatten() }, 400);
 
-  const existing = await db.query.expense.findFirst({ where: eq(expense.id, (req.params.id as string)) });
-  if (!existing) return res.status(404).json({ message: "Not found", code: "NOT_FOUND" });
+  const existing = await db.query.expense.findFirst({ where: eq(expense.id, c.req.param("id")) });
+  if (!existing) return c.json({ message: "Not found", code: "NOT_FOUND" }, 404);
 
   const [updated] = await db
     .update(expense)
     .set({ ...parsed.data, updatedAt: new Date() })
-    .where(eq(expense.id, (req.params.id as string)))
+    .where(eq(expense.id, c.req.param("id")))
     .returning();
-  res.json({ data: updated });
+  return c.json({ data: updated });
 });
 
 // DELETE /api/expenses/:id
-router.delete("/:id", async (req: Request, res: Response) => {
-  const existing = await db.query.expense.findFirst({ where: eq(expense.id, (req.params.id as string)) });
-  if (!existing) return res.status(404).json({ message: "Not found", code: "NOT_FOUND" });
-  await db.delete(expense).where(eq(expense.id, (req.params.id as string)));
-  res.json({ message: "Deleted" });
+router.delete("/:id", async (c) => {
+  const existing = await db.query.expense.findFirst({ where: eq(expense.id, c.req.param("id")) });
+  if (!existing) return c.json({ message: "Not found", code: "NOT_FOUND" }, 404);
+  await db.delete(expense).where(eq(expense.id, c.req.param("id")));
+  return c.json({ message: "Deleted" });
 });
 
 export { router as expensesRouter };

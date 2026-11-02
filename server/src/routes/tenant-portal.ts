@@ -1,4 +1,5 @@
-import { Router, type Request, type Response } from "express";
+import { Hono } from "hono";
+import type { AppEnv } from "../env.js";
 import { z } from "zod";
 import { eq, and } from "drizzle-orm";
 import { db } from "../db/index.js";
@@ -12,8 +13,8 @@ import {
 } from "../db/schema.js";
 import { authMiddleware } from "../auth/middleware.js";
 
-const router = Router();
-router.use(authMiddleware);
+const router = new Hono<AppEnv>();
+router.use("*", authMiddleware);
 
 /**
  * Tenant portal routes — accessed by the tenant's own user account.
@@ -33,21 +34,21 @@ async function getTenantForUser(userId: string) {
 }
 
 // GET /api/tenant-portal/profile — get tenant's profile and active lease
-router.get("/profile", async (req: Request, res: Response) => {
-  const userId = (req as any).userId as string;
+router.get("/profile", async (c) => {
+  const userId = c.get("userId");
   const tenantRecord = await getTenantForUser(userId);
 
   if (!tenantRecord) {
-    return res.status(404).json({
+    return c.json({
       message: "No tenant account linked. Ask your landlord to activate your tenant portal.",
       code: "TENANT_NOT_LINKED",
-    });
+    }, 404);
   }
 
   // Find active lease
   const activeLease = tenantRecord.leases.find((l) => l.status === "active");
 
-  res.json({
+  return c.json({
     data: {
       tenant: {
         id: tenantRecord.id,
@@ -77,11 +78,11 @@ router.get("/profile", async (req: Request, res: Response) => {
 });
 
 // GET /api/tenant-portal/payments — get tenant's payment history
-router.get("/payments", async (req: Request, res: Response) => {
-  const userId = (req as any).userId as string;
+router.get("/payments", async (c) => {
+  const userId = c.get("userId");
   const tenantRecord = await getTenantForUser(userId);
   if (!tenantRecord) {
-    return res.status(404).json({ message: "No tenant account linked", code: "TENANT_NOT_LINKED" });
+    return c.json({ message: "No tenant account linked", code: "TENANT_NOT_LINKED" }, 404);
   }
 
   const payments = await db.query.payment.findMany({
@@ -90,15 +91,15 @@ router.get("/payments", async (req: Request, res: Response) => {
     orderBy: (payment, { desc }) => [desc(payment.dueDate)],
   });
 
-  res.json({ data: payments });
+  return c.json({ data: payments });
 });
 
 // GET /api/tenant-portal/payments/due — get current due payment
-router.get("/payments/due", async (req: Request, res: Response) => {
-  const userId = (req as any).userId as string;
+router.get("/payments/due", async (c) => {
+  const userId = c.get("userId");
   const tenantRecord = await getTenantForUser(userId);
   if (!tenantRecord) {
-    return res.status(404).json({ message: "No tenant account linked", code: "TENANT_NOT_LINKED" });
+    return c.json({ message: "No tenant account linked", code: "TENANT_NOT_LINKED" }, 404);
   }
 
   const today = new Date().toISOString().split("T")[0];
@@ -116,15 +117,15 @@ router.get("/payments/due", async (req: Request, res: Response) => {
     .filter((p) => p.dueDate <= today || p.status === "late")
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0];
 
-  res.json({ data: duePayment || null });
+  return c.json({ data: duePayment || null });
 });
 
 // GET /api/tenant-portal/maintenance — tenant's maintenance requests
-router.get("/maintenance", async (req: Request, res: Response) => {
-  const userId = (req as any).userId as string;
+router.get("/maintenance", async (c) => {
+  const userId = c.get("userId");
   const tenantRecord = await getTenantForUser(userId);
   if (!tenantRecord) {
-    return res.status(404).json({ message: "No tenant account linked", code: "TENANT_NOT_LINKED" });
+    return c.json({ message: "No tenant account linked", code: "TENANT_NOT_LINKED" }, 404);
   }
 
   const requests = await db.query.maintenanceRequest.findMany({
@@ -133,15 +134,15 @@ router.get("/maintenance", async (req: Request, res: Response) => {
     orderBy: (mr, { desc }) => [desc(mr.submittedAt)],
   });
 
-  res.json({ data: requests });
+  return c.json({ data: requests });
 });
 
 // POST /api/tenant-portal/maintenance — tenant submits maintenance request
-router.post("/maintenance", async (req: Request, res: Response) => {
-  const userId = (req as any).userId as string;
+router.post("/maintenance", async (c) => {
+  const userId = c.get("userId");
   const tenantRecord = await getTenantForUser(userId);
   if (!tenantRecord) {
-    return res.status(404).json({ message: "No tenant account linked", code: "TENANT_NOT_LINKED" });
+    return c.json({ message: "No tenant account linked", code: "TENANT_NOT_LINKED" }, 404);
   }
 
   const schema = z.object({
@@ -150,15 +151,15 @@ router.post("/maintenance", async (req: Request, res: Response) => {
     photos: z.array(z.string()).default([]),
   });
 
-  const parsed = schema.safeParse(req.body);
+  const parsed = schema.safeParse(c.get("body"));
   if (!parsed.success) {
-    return res.status(400).json({ message: "Validation error", code: "VALIDATION", details: parsed.error.flatten() });
+    return c.json({ message: "Validation error", code: "VALIDATION", details: parsed.error.flatten() }, 400);
   }
 
   // Find the tenant's active lease to get unit/property
   const activeLease = tenantRecord.leases.find((l) => l.status === "active");
   if (!activeLease) {
-    return res.status(400).json({ message: "No active lease found", code: "NO_ACTIVE_LEASE" });
+    return c.json({ message: "No active lease found", code: "NO_ACTIVE_LEASE" }, 400);
   }
 
   const [created] = await db
@@ -176,23 +177,23 @@ router.post("/maintenance", async (req: Request, res: Response) => {
     })
     .returning();
 
-  res.status(201).json({ data: created });
+  return c.json({ data: created }, 201);
 });
 
 // GET /api/tenant-portal/lease — tenant's current lease document
-router.get("/lease", async (req: Request, res: Response) => {
-  const userId = (req as any).userId as string;
+router.get("/lease", async (c) => {
+  const userId = c.get("userId");
   const tenantRecord = await getTenantForUser(userId);
   if (!tenantRecord) {
-    return res.status(404).json({ message: "No tenant account linked", code: "TENANT_NOT_LINKED" });
+    return c.json({ message: "No tenant account linked", code: "TENANT_NOT_LINKED" }, 404);
   }
 
   const activeLease = tenantRecord.leases.find((l) => l.status === "active");
   if (!activeLease) {
-    return res.status(404).json({ message: "No active lease", code: "NO_ACTIVE_LEASE" });
+    return c.json({ message: "No active lease", code: "NO_ACTIVE_LEASE" }, 404);
   }
 
-  res.json({
+  return c.json({
     data: {
       id: activeLease.id,
       startDate: activeLease.startDate,

@@ -45,7 +45,7 @@ export function TenantLayout({ children }: { children: ReactNode }) {
             <Home className="h-5 w-5 text-white" />
           </div>
           <div>
-            <span className="text-lg font-extrabold tracking-tight text-ink">RentLite</span>
+            <span className="text-lg font-extrabold tracking-tight text-ink">Manage Homestay</span>
             <span className="ml-1.5 rounded-md bg-deep/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-deep">
               Tenant
             </span>

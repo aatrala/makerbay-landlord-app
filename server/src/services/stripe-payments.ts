@@ -6,7 +6,7 @@ function getStripeClient(): Stripe | null {
   if (stripeClient) return stripeClient;
   const secretKey = process.env.STRIPE_SECRET_KEY;
   if (!secretKey) return null;
-  stripeClient = new Stripe(secretKey);
+  stripeClient = new Stripe(secretKey, { httpClient: Stripe.createFetchHttpClient() });
   return stripeClient;
 }
 
@@ -70,17 +70,28 @@ export async function confirmPaymentStatus(
 /**
  * Construct a Stripe webhook event for signature verification.
  */
-export function constructWebhookEvent(
+export async function constructWebhookEvent(
   payload: string | Buffer,
   signature: string,
-): Stripe.Event | null {
+): Promise<Stripe.Event | null> {
   const stripe = getStripeClient();
   if (!stripe) return null;
 
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
   if (!webhookSecret) return null;
 
-  return stripe.webhooks.constructEvent(payload, signature, webhookSecret);
+  // Async + SubtleCrypto works on Workers (no Node crypto needed).
+  try {
+    return await stripe.webhooks.constructEventAsync(
+      payload,
+      signature,
+      webhookSecret,
+      undefined,
+      Stripe.createSubtleCryptoProvider(),
+    );
+  } catch {
+    return null;
+  }
 }
 
 /**

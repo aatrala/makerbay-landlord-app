@@ -1,4 +1,5 @@
-import { Router, type Request, type Response } from "express";
+import { Hono } from "hono";
+import type { AppEnv } from "../env.js";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { db } from "../db/index.js";
@@ -12,13 +13,13 @@ import {
   constructWebhookEvent,
 } from "../services/stripe-payments.js";
 
-const router = Router();
+const router = new Hono<AppEnv>();
 
 // GET /api/stripe/config — get publishable key for frontend
-router.get("/config", (_req: Request, res: Response) => {
+router.get("/config", (c) => {
   const publishableKey = getPublishableKey();
   if (!publishableKey) {
-    return res.json({
+    return c.json({
       data: {
         configured: false,
         publishableKey: null,
@@ -26,31 +27,31 @@ router.get("/config", (_req: Request, res: Response) => {
       },
     });
   }
-  res.json({ data: { configured: true, publishableKey } });
+  return c.json({ data: { configured: true, publishableKey } });
 });
 
 // POST /api/stripe/create-payment-intent — landlord creates intent for tenant payment
-router.post("/create-payment-intent", authMiddleware, async (req: Request, res: Response) => {
+router.post("/create-payment-intent", authMiddleware, async (c) => {
   if (!isStripeConfigured()) {
-    return res.status(400).json({
+    return c.json({
       message: "Stripe is not configured",
       code: "STRIPE_NOT_CONFIGURED",
-    });
+    }, 400);
   }
 
-  const userId = (req as any).userId as string;
+  const userId = c.get("userId");
 
   const schema = z.object({
     paymentId: z.string().uuid(),
   });
 
-  const parsed = schema.safeParse(req.body);
+  const parsed = schema.safeParse(c.get("body"));
   if (!parsed.success) {
-    return res.status(400).json({
+    return c.json({
       message: "Validation error",
       code: "VALIDATION",
       details: parsed.error.flatten(),
-    });
+    }, 400);
   }
 
   try {
@@ -61,7 +62,7 @@ router.post("/create-payment-intent", authMiddleware, async (req: Request, res: 
     });
 
     if (!paymentRecord) {
-      return res.status(404).json({ message: "Payment not found", code: "NOT_FOUND" });
+      return c.json({ message: "Payment not found", code: "NOT_FOUND" }, 404);
     }
 
     // Verify ownership
@@ -69,7 +70,7 @@ router.post("/create-payment-intent", authMiddleware, async (req: Request, res: 
       where: eq(property.id, paymentRecord.unit.propertyId),
     });
     if (!prop || prop.userId !== userId) {
-      return res.status(403).json({ message: "Not authorized", code: "FORBIDDEN" });
+      return c.json({ message: "Not authorized", code: "FORBIDDEN" }, 403);
     }
 
     // Calculate total due (rent + late fee)
@@ -77,10 +78,10 @@ router.post("/create-payment-intent", authMiddleware, async (req: Request, res: 
     const amountRemaining = totalDue - (paymentRecord.amountPaid || 0);
 
     if (amountRemaining <= 0) {
-      return res.status(400).json({
+      return c.json({
         message: "Payment already settled",
         code: "ALREADY_PAID",
-      });
+      }, 400);
     }
 
     // Create Stripe PaymentIntent
@@ -95,10 +96,10 @@ router.post("/create-payment-intent", authMiddleware, async (req: Request, res: 
     });
 
     if (!result) {
-      return res.status(500).json({
+      return c.json({
         message: "Failed to create payment intent",
         code: "PAYMENT_INTENT_FAILED",
-      });
+      }, 500);
     }
 
     // Save Stripe references to payment record
@@ -111,7 +112,7 @@ router.post("/create-payment-intent", authMiddleware, async (req: Request, res: 
       })
       .where(eq(payment.id, parsed.data.paymentId));
 
-    res.json({
+    return c.json({
       data: {
         clientSecret: result.clientSecret,
         paymentIntentId: result.paymentIntentId,
@@ -120,23 +121,23 @@ router.post("/create-payment-intent", authMiddleware, async (req: Request, res: 
     });
   } catch (error) {
     console.error("[Stripe] Create payment intent error:", error);
-    res.status(500).json({
+    return c.json({
       message: "Failed to create payment intent",
       code: "PAYMENT_ERROR",
-    });
+    }, 500);
   }
 });
 
 // POST /api/stripe/webhook — Stripe webhook handler (no auth middleware, uses signature)
-router.post("/webhook", async (req: Request, res: Response) => {
-  const sig = req.headers["stripe-signature"] as string;
+router.post("/webhook", async (c) => {
+  const sig = c.req.header("stripe-signature") as string;
   if (!sig) {
-    return res.status(400).json({ message: "Missing stripe-signature", code: "NO_SIGNATURE" });
+    return c.json({ message: "Missing stripe-signature", code: "NO_SIGNATURE" }, 400);
   }
 
-  const event = constructWebhookEvent(JSON.stringify(req.body), sig);
+  const event = await constructWebhookEvent(c.get("rawBody") ?? "", sig);
   if (!event) {
-    return res.status(400).json({ message: "Webhook verification failed", code: "WEBHOOK_INVALID" });
+    return c.json({ message: "Webhook verification failed", code: "WEBHOOK_INVALID" }, 400);
   }
 
   try {
@@ -175,19 +176,19 @@ router.post("/webhook", async (req: Request, res: Response) => {
       }
     }
 
-    res.json({ received: true });
+    return c.json({ received: true });
   } catch (error) {
     console.error("[Stripe] Webhook error:", error);
-    res.status(500).json({ message: "Webhook processing failed", code: "WEBHOOK_ERROR" });
+    return c.json({ message: "Webhook processing failed", code: "WEBHOOK_ERROR" }, 500);
   }
 });
 
 // POST /api/stripe/confirm-payment — manually confirm a payment status
-router.post("/confirm-payment", authMiddleware, async (req: Request, res: Response) => {
+router.post("/confirm-payment", authMiddleware, async (c) => {
   const schema = z.object({ paymentId: z.string().uuid() });
-  const parsed = schema.safeParse(req.body);
+  const parsed = schema.safeParse(c.get("body"));
   if (!parsed.success) {
-    return res.status(400).json({ message: "Validation error", code: "VALIDATION" });
+    return c.json({ message: "Validation error", code: "VALIDATION" }, 400);
   }
 
   const paymentRecord = await db.query.payment.findFirst({
@@ -195,12 +196,12 @@ router.post("/confirm-payment", authMiddleware, async (req: Request, res: Respon
   });
 
   if (!paymentRecord?.stripePaymentIntentId) {
-    return res.status(404).json({ message: "No Stripe payment found", code: "NOT_FOUND" });
+    return c.json({ message: "No Stripe payment found", code: "NOT_FOUND" }, 404);
   }
 
   const result = await confirmPaymentStatus(paymentRecord.stripePaymentIntentId);
   if (!result) {
-    return res.status(500).json({ message: "Stripe not configured", code: "NOT_CONFIGURED" });
+    return c.json({ message: "Stripe not configured", code: "NOT_CONFIGURED" }, 500);
   }
 
   // Update payment if succeeded
@@ -217,7 +218,7 @@ router.post("/confirm-payment", authMiddleware, async (req: Request, res: Respon
       .where(eq(payment.id, parsed.data.paymentId));
   }
 
-  res.json({ data: result });
+  return c.json({ data: result });
 });
 
 export { router as stripeRouter };
