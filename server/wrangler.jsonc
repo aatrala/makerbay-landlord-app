@@ -50,6 +50,28 @@
     "TURNSTILE_SITE_KEY": "0x4AAAAAAFxAC9O0LvhR23pN"
   }
 
+  ,
+  // Test-mode preview: `pnpm exec wrangler deploy --env preview` -> managehomestay-preview.aatrala.workers.dev
+  // No routes, no crons, no Turnstile. Holds NO live secrets: add Stripe TEST keys with
+  // `wrangler secret put ... --env preview`. NOTE: shares the production Hyperdrive/DB and R2
+  // unless you point HYPERDRIVE at a Neon branch.
+  "env": {
+    "preview": {
+      "name": "managehomestay-preview",
+      "workers_dev": true,
+      "routes": [],
+      "triggers": { "crons": [] },
+      "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "2e014a8eac5a457dae789874ec7a35f5" }],
+      "r2_buckets": [{ "binding": "UPLOADS", "bucket_name": "managehomestay-uploads" }],
+      "vars": {
+        "APP_URL": "https://managehomestay-preview.aatrala.workers.dev",
+        "BETTER_AUTH_URL": "https://managehomestay-preview.aatrala.workers.dev",
+        "EXTRA_ORIGINS": "",
+        "EMAIL_FROM": "Manage Homestay Preview <noreply@send.managehomestay.com>"
+      }
+    }
+  }
+
   // Custom domain is attached in DEPLOY.md step 7 (not here) so that a
   // deploy never takes over the apex by accident.
 }

@@ -1,4 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { loadStripe } from "@stripe/stripe-js";
+import { Elements } from "@stripe/react-stripe-js";
+import { StripePayForm, type PayResult } from "../components/StripePayForm";
+import { parseStripeReturn, waitForReceived } from "../lib/stripe-return";
 import { api } from "../lib/api";
 import { Card } from "../components/ui/Card";
 import { Badge } from "../components/ui/Badge";
@@ -29,59 +33,80 @@ export function TenantPayments() {
   const [stripeConfig, setStripeConfig] = useState<StripeConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [payingId, setPayingId] = useState<string | null>(null);
-  const [paymentSuccess, setPaymentSuccess] = useState<string | null>(null);
+  const [checkout, setCheckout] = useState<{ paymentId: string; clientSecret: string; amountDue: number } | null>(null);
+  // Per-payment UI state: waiting for the webhook, confirmed, or failed
+  const [payState, setPayState] = useState<Record<string, { kind: "pending" | "paid" | "failed" | "slow"; message?: string }>>({});
+
+  const stripePromise = useMemo(
+    () => (stripeConfig?.publishableKey ? loadStripe(stripeConfig.publishableKey) : null),
+    [stripeConfig?.publishableKey],
+  );
+
+  const loadPayments = () =>
+    api.get<{ data: PaymentRecord[] }>("/api/tenant-portal/payments").then((res) => {
+      setPayments(res.data);
+      return res.data;
+    });
 
   useEffect(() => {
-    Promise.all([
-      api.get<{ data: PaymentRecord[] }>("/api/tenant-portal/payments"),
-      api.get<{ data: StripeConfig }>("/api/stripe/config"),
-    ])
-      .then(([paymentsRes, configRes]) => {
-        setPayments(paymentsRes.data);
-        setStripeConfig(configRes.data);
-      })
+    Promise.all([loadPayments(), api.get<{ data: StripeConfig }>("/api/stripe/config")])
+      .then(([, configRes]) => setStripeConfig(configRes.data))
       .catch(() => {})
       .finally(() => setLoading(false));
+
+    // Returning from a redirect-based payment method (3DS, bank redirect, ...)
+    const ret = parseStripeReturn(window.location.search);
+    if (ret) {
+      window.history.replaceState(null, "", window.location.pathname);
+      if (ret.outcome === "failed") {
+        setPayState((s) => ({ ...s, [ret.paymentId]: { kind: "failed", message: "Payment was not completed." } }));
+      } else {
+        void awaitWebhook(ret.paymentId);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function awaitWebhook(paymentId: string) {
+    setPayState((s) => ({ ...s, [paymentId]: { kind: "pending" } }));
+    const result = await waitForReceived(async () => {
+      const list = await loadPayments();
+      return list.find((p) => p.id === paymentId)?.status;
+    });
+    setPayState((s) => ({ ...s, [paymentId]: { kind: result === "received" ? "paid" : "slow" } }));
+  }
 
   const handlePayOnline = async (paymentId: string) => {
     if (!stripeConfig?.configured) {
       alert("Online payments are not configured yet. Please contact your landlord.");
       return;
     }
-
     setPayingId(paymentId);
+    setPayState((s) => {
+      const { [paymentId]: _, ...rest } = s;
+      return rest;
+    });
     try {
-      // Create Stripe PaymentIntent
       const { data } = await api.post<{ data: { clientSecret: string; paymentIntentId: string; amountDue: number } }>(
         "/api/stripe/create-payment-intent",
         { paymentId },
       );
-
-      // In a full implementation, we'd use @stripe/react-stripe-js Elements here.
-      // For now, redirect to Stripe Checkout or show a payment form.
-      // This is a placeholder that shows the payment flow structure.
-      const confirmed = window.confirm(
-        `Pay $${data.amountDue.toFixed(2)} online via Stripe?\n\n` +
-        `In production, this would open a secure Stripe payment form.\n` +
-        `Payment Intent: ${data.paymentIntentId}`,
-      );
-
-      if (confirmed) {
-        // Confirm payment status
-        await api.post("/api/stripe/confirm-payment", { paymentId });
-        setPaymentSuccess(paymentId);
-
-        // Refresh payments
-        const res = await api.get<{ data: PaymentRecord[] }>("/api/tenant-portal/payments");
-        setPayments(res.data);
-      }
+      setCheckout({ paymentId, clientSecret: data.clientSecret, amountDue: data.amountDue });
     } catch (err) {
       console.error("Payment error:", err);
-      alert("Payment failed. Please try again.");
+      setPayState((s) => ({ ...s, [paymentId]: { kind: "failed", message: "Could not start the payment. Please try again." } }));
     } finally {
       setPayingId(null);
     }
+  };
+
+  const handleResult = (paymentId: string, r: PayResult) => {
+    if (r.outcome === "failed") {
+      setPayState((s) => ({ ...s, [paymentId]: { kind: "failed", message: r.message } }));
+      return;
+    }
+    setCheckout(null);
+    void awaitWebhook(paymentId);
   };
 
   if (loading) return <div className="text-muted">Loading payments...</div>;
@@ -141,21 +166,47 @@ export function TenantPayments() {
                     <Button
                       variant="primary"
                       size="sm"
-                      disabled={payingId === p.id || paymentSuccess === p.id}
+                      disabled={payingId === p.id || !!payState[p.id] && payState[p.id].kind !== "failed" || checkout?.paymentId === p.id}
                       onClick={() => handlePayOnline(p.id)}
                     >
                       {payingId === p.id ? (
                         <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                      ) : paymentSuccess === p.id ? (
+                      ) : payState[p.id]?.kind === "paid" ? (
                         <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
                       ) : (
                         <CreditCard className="mr-1.5 h-3.5 w-3.5" />
                       )}
-                      {paymentSuccess === p.id ? "Paid" : "Pay Online"}
+                      {payState[p.id]?.kind === "paid" ? "Paid" : payState[p.id]?.kind === "failed" ? "Try again" : "Pay Online"}
                     </Button>
                   )}
                 </div>
               </div>
+              {payState[p.id]?.kind === "pending" && (
+                <p className="mt-3 flex items-center text-sm text-muted">
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Payment submitted. Waiting for confirmation from Stripe...
+                </p>
+              )}
+              {payState[p.id]?.kind === "slow" && (
+                <p className="mt-3 text-sm text-yellow-700">
+                  Payment submitted. Confirmation is taking longer than usual; refresh this page in a few minutes.
+                </p>
+              )}
+              {payState[p.id]?.kind === "paid" && (
+                <p className="mt-3 text-sm text-green-600">Payment received. Thank you!</p>
+              )}
+              {payState[p.id]?.kind === "failed" && (
+                <p className="mt-3 text-sm text-red-600">{payState[p.id]?.message || "Payment failed."}</p>
+              )}
+              {checkout?.paymentId === p.id && stripePromise && (
+                <Elements stripe={stripePromise} options={{ clientSecret: checkout.clientSecret }}>
+                  <StripePayForm
+                    paymentId={p.id}
+                    amountDue={checkout.amountDue}
+                    onResult={(r) => handleResult(p.id, r)}
+                    onCancel={() => setCheckout(null)}
+                  />
+                </Elements>
+              )}
             </Card>
           );
         })}
