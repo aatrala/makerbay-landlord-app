@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import type { AppEnv } from "./env.js";
-import { envVar } from "./env.js";
+import { allowedOrigins, envVar } from "./env.js";
 import { getAuth } from "./auth/index.js";
 import { propertiesRouter } from "./routes/properties.js";
 import { unitsRouter } from "./routes/units.js";
@@ -27,7 +27,7 @@ export function createApp() {
     "/api/*",
     cors({
       origin: (origin) => {
-        const allowed = [envVar("APP_URL"), "http://localhost:5173"].filter(Boolean);
+        const allowed = allowedOrigins();
         return allowed.includes(origin) ? origin : null;
       },
       credentials: true,

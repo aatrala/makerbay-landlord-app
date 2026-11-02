@@ -24,3 +24,9 @@ export function envVar(name: string): string | undefined {
   const v = typeof process !== "undefined" ? process.env?.[name] : undefined;
   return v === "" ? undefined : v;
 }
+
+/** APP_URL plus comma-separated EXTRA_ORIGINS (e.g. www and the workers.dev preview host). */
+export function allowedOrigins(): string[] {
+  const extra = (envVar("EXTRA_ORIGINS") || "").split(",").map((o) => o.trim()).filter(Boolean);
+  return [envVar("APP_URL"), ...extra, "http://localhost:5173"].filter(Boolean) as string[];
+}

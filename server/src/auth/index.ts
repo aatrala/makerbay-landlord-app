@@ -3,7 +3,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { captcha } from "better-auth/plugins";
 import { db } from "../db/index.js";
 import * as schema from "../db/schema.js";
-import { envVar } from "../env.js";
+import { allowedOrigins, envVar } from "../env.js";
 
 function build() {
   const appUrl = envVar("APP_URL") || envVar("BETTER_AUTH_URL") || "http://localhost:5173";
@@ -21,7 +21,7 @@ function build() {
       expiresIn: 60 * 60 * 24 * 7,
       updateAge: 60 * 60 * 24,
     },
-    trustedOrigins: [appUrl, "http://localhost:5173"],
+    trustedOrigins: [...new Set([appUrl, ...allowedOrigins()])],
     // Cloudflare Turnstile on sign-up and sign-in (client sends x-captcha-response).
     plugins: turnstileSecret
       ? [
@@ -41,7 +41,7 @@ let builtFor: string | undefined;
 
 /** Lazily build Better-Auth so env (Workers secrets) is read at request time. */
 export function getAuth(): Auth {
-  const key = `${envVar("BETTER_AUTH_URL")}|${envVar("APP_URL")}|${envVar("TURNSTILE_SECRET_KEY") ? 1 : 0}`;
+  const key = `${envVar("BETTER_AUTH_URL")}|${envVar("APP_URL")}|${envVar("TURNSTILE_SECRET_KEY") ? 1 : 0}|${envVar("EXTRA_ORIGINS")}`;
   if (!instance || builtFor !== key) {
     instance = build();
     builtFor = key;
