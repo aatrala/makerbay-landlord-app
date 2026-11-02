@@ -31,9 +31,7 @@
   ],
 
   // Uploads (maintenance photos, receipts, lease docs) — replaces multer + disk.
-  // R2 is not enabled on the account yet (Dashboard -> R2 -> enable). Then: wrangler r2 bucket create managehomestay-uploads,
-  // and uncomment. Until then /api/uploads returns 503.
-  // "r2_buckets": [{ "binding": "UPLOADS", "bucket_name": "managehomestay-uploads" }],
+  "r2_buckets": [{ "binding": "UPLOADS", "bucket_name": "managehomestay-uploads" }],
 
   // Daily at 02:30 UTC (08:00 IST): iCal import, rent reminders, STR digests.
   "triggers": { "crons": ["30 2 * * *"] },

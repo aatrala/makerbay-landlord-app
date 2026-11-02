@@ -79,10 +79,21 @@ export function createApp() {
 
   app.notFound((c) => c.json({ message: "Not found", code: "NOT_FOUND" }, 404));
   app.onError((err, c) => {
+    // A malformed id in the URL (e.g. "null") makes Postgres raise 22P02
+    // (invalid_text_representation); no such record can exist, so answer 404.
+    if (isInvalidIdError(err)) return c.json({ message: "Not found", code: "NOT_FOUND" }, 404);
     console.error("[API]", err);
     return c.json({ message: "Internal error", code: "INTERNAL" }, 500);
   });
   return app;
+}
+
+function isInvalidIdError(err: unknown): boolean {
+  for (let e: any = err, i = 0; e && i < 4; e = e.cause, i++) {
+    if (e.code === "22P02") return true;
+    if (/invalid input syntax for type uuid/i.test(String(e.message ?? ""))) return true;
+  }
+  return false;
 }
 
 export const app = createApp();
